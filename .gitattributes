@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+*.md       text diff=markdown
+*.java     text diff=java
+*.json     text
+*.yml      text
+*.yaml     text
+
+*.jar      binary
+*.png      binary
+*.jpg      binary
+*.pdf      binary

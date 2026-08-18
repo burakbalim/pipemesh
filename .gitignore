@@ -1,0 +1,63 @@
+### Java / Maven ###
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+replay_pid*
+
+### Gradle ###
+.gradle/
+build/
+!src/**/build/
+
+### IDE — IntelliJ ###
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+### IDE — Eclipse / STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+### IDE — VS Code ###
+.vscode/
+
+### Node (schema tooling, examples) ###
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+### Python (examples, scripts) ###
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+### Secrets & local config ###
+.env
+.env.*
+!.env.example
+*.local
+application-local.yml
+application-local.properties
+
+### Logs & temp ###
+*.log
+logs/
+tmp/
+*.tmp
+
+### OS ###
+.DS_Store
+Thumbs.db
