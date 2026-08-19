@@ -9,14 +9,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Workflows are versioned JSON artifacts. The runtime compiles them into an execution graph and runs
 them through pluggable providers, with durable state so an execution survives process restarts.
 
-**Current status: design phase.** There is no source code yet. The repository holds the architecture
-document and the contracts that split it into implementable slices.
+**Current status: first slice, stage 1 of 6.** `pipemesh-core` holds the model types and the
+interfaces; no execution engine yet.
 
 ```
 DESIGN.md                      # full technical architecture (47 sections)
 README.md                      # public overview
 .claude/contracts/README.md    # index: DESIGN.md → 15 planned contracts
 .claude/contracts/*.md         # one contract per implementable slice
+pipemesh-core/                 # workflow model, execution contracts, runtime API
 ```
 
 Read `DESIGN.md` before making architectural claims. Section numbers (§9.8, §26.1, …) are referenced
@@ -38,6 +39,22 @@ write one first.
 The active slice is `.claude/contracts/walking-skeleton.md` — the first end-to-end vertical slice:
 `JSON Workflow → LLM → Condition → MCP → Approval → Resume → Observable execution`. Its Split
 Decision defines a 6-stage build order; follow it, and do not pull later stages forward.
+
+## Build & Test
+
+```bash
+mvn -o test              # offline: see the note below
+mvn -o -pl pipemesh-core test
+mvn -o test -Dtest=ExecutionContextTest
+```
+
+`~/.m2/settings.xml` on this machine activates an `artifactory` profile that points `central` at a
+corporate mirror, unreachable outside its VPN — an online build hangs rather than failing. Use
+`-o` (the dependencies are cached) or give personal projects their own settings file. Nothing in
+this repository depends on that mirror.
+
+Dependencies are deliberately few: `jackson-databind` at runtime, `junit-jupiter` for tests. Adding
+one to `core/` should feel like a decision, not a convenience.
 
 ## Planned Stack
 

@@ -416,4 +416,59 @@ tek satırlık config değişikliğiyle değiştirilebilir olacak, o yüzden yan
 
 ## Implementation Notes
 
-_To be filled as work progresses_
+### Aşama 1 — Foundation (2026-08-19) ✅
+
+Maven multi-module iskelet + `pipemesh-core`. Sadece model tipleri ve arayüzler; hiçbir
+implementasyon yok. `mvn test` yeşil (17 test).
+
+```
+io.pipemesh.core.workflow     WorkflowId, WorkflowVersion, StepId, StepType, Step, WorkflowDefinition
+io.pipemesh.core.execution    ExecutionId, ExecutionStatus, ExecutionContext, StepResult,
+                              SuspensionReason, StepExecutor, ExecutionInput, ExecutionHandle,
+                              ExecutionSnapshot, ResumeSignal, WorkflowRuntime
+io.pipemesh.core.state        ExecutionRecord, StepRecord, StateStore, StaleExecutionException,
+                              ApprovalRecord, ApprovalStore
+io.pipemesh.core.capability   CapabilityId, CapabilityKind, CapabilityDescriptor,
+                              CapabilityResult, CapabilityProvider, CapabilityRegistry
+io.pipemesh.core.model        ModelId, CompletionRequest, CompletionResponse,
+                              MessagingProvider, ModelRegistry
+```
+
+**Tasarım kararları:**
+
+- **`StepType` enum değil, string sarmalayan record.** Enum olsaydı her yeni step tipi core'u
+  değiştirmeyi gerektirirdi — "yeni primitif eklemek `WorkflowExecutor`'a dokunmamalı" kabul
+  kriterinin doğrudan ihlali. Aynı gerekçeyle `SuspensionReason.kind` de string.
+- **`Step` yalnızca `id` + `type` + ham `config` (JsonNode).** Motor config'in şeklini bilmez;
+  tipi sahiplenen executor yorumlar. Sealed bir `Step` hiyerarşisi genişletilebilirliği kırardı.
+- **`StepResult` ve `CapabilityResult` sealed.** Bunlar motorun kendi sonuç kelime dağarcığı ve
+  kapalı olmaları gerekiyor: yeni bir varyant zaten motorun değişmesi demek.
+- **`ExecutionContext` immutable**, `with(...)`/`at(...)` yeni context döner. Tüm JsonNode alanları
+  hem girişte hem çıkışta `deepCopy()` — test edildi.
+- **Boundary constraints uygulandı:** tüm id'ler string sarmalayan record, `variables` JSON
+  (`ObjectNode`), `ExecutionSnapshot` zaman alanları epoch millis, hiçbir dönüş tipinde `Future`,
+  callback veya açık kaynak yok. `WorkflowRuntime` proto'nun in-process binding'i olacak şekilde
+  yazıldı.
+- **`ApprovalStore` `StateStore`'dan ayrı.** Farklı soruya cevap veriyor ("kim onay bekliyor?"),
+  ve execution variable'larını okumaması gereken insan-yüzlü araçlar tarafından sorgulanacak.
+  `settle(...)` `Optional` döner — tekrarlanan resume sinyali burada düşer (idempotency).
+- **`StateStore.advance(record, step)` tek metot.** Step history ve yeni execution state'i tek
+  transaction'da yazma kuralını API şekliyle zorunlu kılıyor; iki ayrı metot olsaydı kural
+  yalnızca yorumda kalırdı.
+- **`ExecutionRecord.traceContext` baştan var.** Restart sonrası aynı trace'e bağlanmak sonradan
+  eklenemez; Aşama 5'e bırakılsaydı state şeması değişmek zorunda kalırdı.
+
+**Bağımlılıklar:** yalnızca `jackson-databind` (runtime), `junit-jupiter` (test). AssertJ
+başlangıçta eklendi sonra çıkarıldı — kütüphane için gereksiz test bağımlılığı, ayrıca yerel
+ortamda çözülemiyordu (aşağıya bakın).
+
+**Ortam notu:** `~/.m2/settings.xml` içindeki aktif `artifactory` profili `central`'ı
+`artifactory.justlife.com`'a yönlendiriyor; VPN dışında erişilemiyor ve online build asılıyor.
+Şu an build yalnızca `mvn -o` (offline, yerel cache) ile çalışıyor. Public bir repo için bu
+kabul edilemez — kişisel projeler için ayrı bir settings dosyası veya profil devre dışı bırakma
+gerekiyor. Repo'nun kendi pom'u temiz, düzeltme ortam tarafında.
+
+### Sıradaki — Aşama 2
+
+`WorkflowCompiler` (grafik doğrulama), `ConditionStepExecutor`, `TerminalStepExecutor`,
+in-memory `StateStore`. İlk çalışan workflow: condition + terminal.
