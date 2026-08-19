@@ -9,9 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Workflows are versioned JSON artifacts. The runtime compiles them into an execution graph and runs
 them through pluggable providers, with durable state so an execution survives process restarts.
 
-**Current status: first slice, stage 2 of 6.** A workflow defined entirely in JSON compiles and
-runs end to end (condition and terminal steps, in-memory state). Not yet durable: no persistence,
-no approval, no resume.
+**Current status: first slice, stage 3 of 6.** A workflow defined entirely in JSON runs end to
+end, suspends at a human approval, and resumes in a different process — the durability claim is
+covered by a Testcontainers test. Not yet there: LLM and MCP steps, observability.
 
 ```
 DESIGN.md                      # full technical architecture (47 sections)
@@ -44,10 +44,13 @@ Decision defines a 6-stage build order; follow it, and do not pull later stages 
 ## Build & Test
 
 ```bash
-mvn -o test              # offline: see the note below
-mvn -o -pl pipemesh-core test
+mvn -o test                          # everything; needs Docker for the postgres module
+mvn -o -pl pipemesh-core test        # core only, no Docker
 mvn -o test -Dtest=ExecutionContextTest
 ```
+
+`pipemesh-postgres` tests run PostgreSQL in Testcontainers, so Docker must be running. They are the
+only tests that prove durability — an in-memory store cannot.
 
 If a build hangs rather than failing, check `~/.m2/settings.xml`: an `artifactory` profile there
 can point `central` at a corporate mirror that is unreachable outside its VPN. `-o` works from the
@@ -62,7 +65,7 @@ one to `core/` should feel like a decision, not a convenience.
 |---|---|
 | Core runtime | Java 21, **framework-free** — no Spring, no web framework in `core/` |
 | Build | Maven, multi-module |
-| State store | PostgreSQL (JSONB variables, optimistic locking); in-memory impl for tests |
+| State store | PostgreSQL in `pipemesh-postgres` (JSONB variables, optimistic locking); in-memory impl for tests |
 | MCP | `io.modelcontextprotocol.sdk:mcp`, stdio transport |
 | Expressions | narrow in-house evaluator — JSONPath reads + fixed comparison grammar |
 | Client boundary | gRPC (`proto/pipemesh.proto`) — designed now, implemented in a later contract |

@@ -13,6 +13,12 @@ import java.util.Optional;
  */
 public interface ApprovalStore {
 
+    /**
+     * Registers a pending decision. Idempotent: re-creating the same id returns
+     * the existing record rather than failing, because an execution that reaches
+     * an approval step twice — after a crash between the request and the state
+     * write — must land on the same row.
+     */
     ApprovalRecord create(ApprovalRecord record);
 
     Optional<ApprovalRecord> find(String approvalId);

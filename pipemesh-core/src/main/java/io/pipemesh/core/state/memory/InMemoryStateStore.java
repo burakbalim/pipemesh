@@ -6,6 +6,7 @@ import io.pipemesh.core.state.StaleExecutionException;
 import io.pipemesh.core.state.StateStore;
 import io.pipemesh.core.state.StepRecord;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -27,10 +28,20 @@ public final class InMemoryStateStore implements StateStore {
 
     private final Map<ExecutionId, ExecutionRecord> executions = new ConcurrentHashMap<>();
     private final Map<ExecutionId, List<StepRecord>> history = new ConcurrentHashMap<>();
+    private final Clock clock;
+
+    public InMemoryStateStore() {
+        this(Clock.systemUTC());
+    }
+
+    public InMemoryStateStore(Clock clock) {
+        this.clock = clock;
+    }
 
     @Override
     public ExecutionRecord create(ExecutionRecord record) {
-        ExecutionRecord stored = withVersion(record, 1);
+        long now = clock.millis();
+        ExecutionRecord stored = stamped(record, 1, now, now);
         if (executions.putIfAbsent(record.executionId(), stored) != null) {
             throw new IllegalStateException("execution " + record.executionId() + " already exists");
         }
@@ -44,7 +55,8 @@ public final class InMemoryStateStore implements StateStore {
 
     @Override
     public ExecutionRecord advance(ExecutionRecord record, StepRecord step) {
-        ExecutionRecord stored = withVersion(record, record.version() + 1);
+        ExecutionRecord stored = stamped(
+                record, record.version() + 1, record.createdAtEpochMillis(), clock.millis());
         boolean replaced = executions.replace(
                 record.executionId(), expected(record), stored);
         if (!replaced) {
@@ -66,7 +78,9 @@ public final class InMemoryStateStore implements StateStore {
         return current;
     }
 
-    private ExecutionRecord withVersion(ExecutionRecord record, long version) {
+    private ExecutionRecord stamped(
+            ExecutionRecord record, long version, long createdAt, long updatedAt) {
+
         return new ExecutionRecord(
                 record.executionId(),
                 record.workflowId(),
@@ -75,6 +89,8 @@ public final class InMemoryStateStore implements StateStore {
                 record.currentStep(),
                 record.variables(),
                 record.traceContext(),
-                version);
+                version,
+                createdAt,
+                updatedAt);
     }
 }

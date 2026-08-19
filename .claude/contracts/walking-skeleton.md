@@ -510,7 +510,50 @@ state/memory/    InMemoryStateStore
 (approval executor Aşama 3'te) yarım bir implementasyon bırakmak yerine motor `WorkflowExecutor`
 olarak duruyor; `DefaultWorkflowRuntime` Aşama 3'te gelecek.
 
-### Sıradaki — Aşama 3
+### Aşama 3 — Persistence + resume (2026-08-19) ✅
 
-Postgres `StateStore`, migration, optimistic locking, `ApprovalStepExecutor`, `resume()`,
-idempotency ve **restart testi** — dilimin asıl tezi burada kanıtlanıyor.
+**Dilimin tezi kanıtlandı:** approval bekleyen bir execution, onu başlatan process'ten sağ çıkıyor.
+63 test yeşil (57 core + 6 Postgres/Testcontainers), 2 ardışık koşumda stabil.
+
+```
+core/execution/       ResumableStepExecutor, DefaultWorkflowRuntime, WorkflowExecutor.resume(...)
+core/execution/step/  ApprovalStepExecutor
+core/state/memory/    InMemoryApprovalStore
+pipemesh-postgres/    SchemaMigrator, PostgresStateStore, PostgresApprovalStore, JsonColumn,
+                      V001__execution_state.sql
+```
+
+**Tasarım kararları:**
+
+- **Postgres ayrı modül.** `core/` JDBC'ye bağımlı olmamalı; `StateStore` core'da tanımlı,
+  implementasyonu `pipemesh-postgres`'te. Embedder JDBC'yi istemiyorsa almıyor.
+- **`ResumableStepExecutor` ayrı arayüz.** Bir sinyalin ne anlama geldiğine — approval hangi dala
+  gider — suspend'i yazan executor karar verir. Motor yalnızca "bir şey geldi" bilgisine sahip.
+  `WorkflowExecutor.resume` step'in resumable olup olmadığına bakar, config'i yorumlamaz.
+- **Approval id türetiliyor, üretilmiyor:** `executionId + ":" + stepId`. Aynı step'e tekrar
+  girmek aynı id'yi veriyor; `ON CONFLICT DO NOTHING` ile ikinci satır oluşmuyor.
+- **Idempotency iki katmanlı ve ikisi de generic:** (1) `resume` yalnızca `WAITING` durumundaki
+  execution'ı ilerletir — ikinci çağrı olduğu yeri döner, hata değil; (2) `UPDATE ... WHERE
+  version = ?` — yarışan iki resume'dan biri kazanır, diğeri stale olarak reddedilir. Hiçbiri
+  approval'a özgü bilgi içermiyor.
+- **`advance` tek transaction:** execution UPDATE + step history INSERT birlikte commit ediliyor;
+  UPDATE 1 satır etkilemezse rollback + `StaleExecutionException`.
+- **`ExecutionRecord`'a `createdAt`/`updatedAt` eklendi.** `ExecutionSnapshot` bu alanları
+  uyduruyordu (`clock.millis()`); gözlenebilirlik iddiası olan bir sistemde kabul edilemez.
+  Zamanı store yazıyor — satırın gerçekten indiği yer.
+- **Migration için Flyway yok**, ~90 satırlık `SchemaMigrator`. Migration aracı bir uygulamanın
+  seçimi olabilir; bir kütüphanenin dayatması olmamalı — runtime'ın taşıdığı her bağımlılığı
+  embedder devralır.
+
+**Restart testinin dürüst sınırı:** her "process" tamamen yeni bir nesne grafiği (yeni DataSource,
+yeni store'lar, yeni registry, yeni runtime) — restart'ı geçen tek şey veritabanı. Bu, in-memory
+state'in taşınmadığını gerçekten kanıtlıyor. Kanıtlamadığı şey: JVM'in uçuş halindeki bir
+transaction'ın ortasında ölmesi. Onun için ayrı JVM fork'u gerekir; optimistic locking + tek
+transaction bunu tasarımsal olarak karşılıyor ama test etmiyor.
+
+### Sıradaki — Aşama 4
+
+`LlmStepExecutor` + tek model provider, `CapabilityStepExecutor` + MCP client. Bu aşamanın kritik
+kuralı: ikisi de transaction sınırının **dışında** çağrılmalı (`WorkflowExecutor` step'i
+persist'ten önce çalıştırıyor, bu sıralama korunmalı). **LLM provider kararı (#5) burada
+gerekecek.**

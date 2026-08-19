@@ -71,6 +71,28 @@ public final class WorkflowExecutor {
         return drive(graph, created);
     }
 
+    /**
+     * Applies an external signal to the step that is waiting, then keeps going.
+     *
+     * <p>The caller is responsible for having checked that the execution is
+     * resumable; this method assumes it and will fail the step otherwise.
+     */
+    public ExecutionRecord resume(ExecutionGraph graph, ExecutionRecord record, ResumeSignal signal) {
+        Step step = graph.stepAt(record.currentStep());
+        StepExecutor executor = executors.forType(step.type());
+        if (!(executor instanceof ResumableStepExecutor resumable)) {
+            return persist(record, step, new StepResult.Failed("execution.not_resumable",
+                    "step '" + step.id() + "' cannot be resumed", false),
+                    clock.millis(), clock.millis());
+        }
+
+        long startedAt = clock.millis();
+        StepResult result = resumable.resume(step, contextOf(record), signal);
+        long finishedAt = clock.millis();
+
+        return drive(graph, persist(record, step, result, startedAt, finishedAt));
+    }
+
     /** Runs until the execution suspends, ends, or exhausts its step budget. */
     public ExecutionRecord drive(ExecutionGraph graph, ExecutionRecord from) {
         ExecutionRecord current = from;
@@ -182,6 +204,8 @@ public final class WorkflowExecutor {
                 graph.entry(),
                 variables,
                 "",
+                0L,
+                0L,
                 0L);
     }
 
@@ -196,7 +220,9 @@ public final class WorkflowExecutor {
                 currentStep,
                 variables,
                 from.traceContext(),
-                from.version());
+                from.version(),
+                from.createdAtEpochMillis(),
+                from.updatedAtEpochMillis());
     }
 
     private ExecutionRecord exhausted(ExecutionRecord record) {

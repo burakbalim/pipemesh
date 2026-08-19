@@ -17,6 +17,9 @@ import java.util.Objects;
  * whose version no longer matches, which is what stops two workers from
  * advancing the same execution twice.
  *
+ * <p>Timestamps are set by the store, not by the caller: a record's idea of
+ * "now" should come from wherever the row actually lands.
+ *
  * <p>{@code traceContext} is persisted with the state on purpose. An execution
  * resumed after a restart has to attach to the same trace, or observability
  * breaks exactly where it matters most (§22).
@@ -29,7 +32,9 @@ public record ExecutionRecord(
         StepId currentStep,
         ObjectNode variables,
         String traceContext,
-        long version) {
+        long version,
+        long createdAtEpochMillis,
+        long updatedAtEpochMillis) {
 
     public ExecutionRecord {
         Objects.requireNonNull(executionId, "execution id");
