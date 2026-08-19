@@ -1,13 +1,14 @@
 # PipeMesh
 
-**A declarative, model-agnostic runtime for building composable AI workflows.**
+**A language-agnostic declarative runtime for AI workflows, implemented in Java.**
 
-Provider-independent and durable by design: workflows survive process failures, resume where they
-left off, and stay observable end to end.
+A declarative, model-agnostic runtime for building composable AI workflows. Provider-independent
+and durable by design: workflows survive process failures, resume where they left off, and stay
+observable end to end.
 
 PipeMesh treats the workflow itself as a first-class, versioned, declarative artifact. Application
 behavior is described in JSON; the runtime interprets that definition and executes it through
-pluggable model providers, skills and tools.
+pluggable model providers, capabilities and tools.
 
 ```text
 Workflow JSON  →  WHAT should happen
@@ -34,10 +35,13 @@ interpretation — not for orchestration.
 | Primitive | Role |
 |---|---|
 | **Workflow** | Versioned JSON definition of the execution graph |
-| **Step** | A unit of execution: `llm`, `skill`, `condition`, `approval`, `parallel`, `transform`, `wait` |
-| **Skill** | An abstract capability, backed by MCP, REST, or in-process code |
+| **Step** | A unit of execution: `llm`, `capability`, `condition`, `approval`, `parallel`, `transform`, `wait` |
+| **Capability** | A named unit of work — backed by MCP, REST, gRPC, an in-process function or an external worker |
 | **Provider** | Pluggable model / messaging backend |
 | **Execution state** | Persisted, observable, resumable |
+
+A workflow names a capability and nothing more. Ownership, version, deployment mechanism and
+permissions live in the capability registration, never in the workflow step (§9.8).
 
 ## Architecture at a glance
 
@@ -59,32 +63,94 @@ interpretation — not for orchestration.
                 │ Workflow Engine│
                 └───────┬────────┘
                         │
-        ┌───────────────┼────────────────┐
-        ▼               ▼                ▼
-      Model           Skill           Approval
-     Provider        Registry          Gateway
-        │               │                │
-        ▼               ▼                ▼
-       LLM          MCP / API /      Human / System
+        ┌───────────────┼───────────────────┐
+        ▼               ▼                   ▼
+      Model         Capability          Approval
+     Provider        Registry            Gateway
+        │               │                   │
+        ▼               ▼                   ▼
+       LLM         MCP / API /        Human / System
                      Service
 ```
+
+## Stack
+
+The runtime is implemented in **Java 21**; the workflows it runs are not tied to any language.
+
+| Layer | Technology |
+|---|---|
+| Core runtime | Java 21, framework-free (no Spring dependency in `core/`) |
+| Build | Maven, multi-module |
+| Client boundary | gRPC — `pipemesh.proto` is the authoritative API contract |
+| SDKs | Python, TypeScript, Java — generated from the same proto |
+| Spring integration | `pipemesh-spring-boot-starter` (optional, separate module) |
+| Workflow definitions | JSON — authored and versioned independently of all of the above |
+
+"Language-agnostic" means three things: a workflow is a JSON artifact that no runtime language leaks
+into, any language can drive the runtime over gRPC, and capabilities may be implemented in any language
+behind the capability provider boundary. Java callers may skip the network entirely and embed the runtime
+as a library.
+
+```text
+     Python SDK    Java SDK    TypeScript SDK
+          └────────────┼────────────┘
+                     gRPC
+                       ▼
+              PipeMesh Runtime (Java)
+                       │
+          ┌────────────┼────────────┐
+       Workflow      State      Providers
+                                   │
+                              ┌────┴────┐
+                             LLM       MCP
+```
+
+Three concepts stay separate throughout the design (§26.2):
+
+```text
+Runtime   →  the engine: workflow execution, state, scheduling
+SDK       →  how a developer reaches the runtime
+Provider  →  how the runtime reaches the outside world
+```
+
+LangChain, OpenAI, MCP and managed agent platforms are all *providers* — optional adapters, never
+dependencies of the core.
+
+## Deployment
+
+```text
+Embedded   Java app runs the runtime in its own JVM
+Remote     any language reaches a runtime process over gRPC (docker run pipemesh/runtime)
+Shared     several applications, several languages, one runtime deployment
+```
+
+Business logic never moves into the runtime. A workflow may *name* a capability, never carry code:
+implementations live in the application or worker that registered them (§23.1).
+
+See [DESIGN.md §26](DESIGN.md) for the boundary, the deployment modes and how the runtime invokes
+work that lives inside an SDK.
 
 ## Planned project structure
 
 ```text
-core/           # workflow, execution, state, scheduler, expressions
-providers/      # messaging, models, tools
-integrations/   # mcp, http, messaging
-registry/       # workflow, skill, prompt, model
-observability/  # tracing, metrics, logging
-schemas/        # workflow / skill / model JSON schemas
+core/           # workflow, execution, state, scheduler, expressions   (Java)
+providers/      # messaging, models, tools                            (Java)
+integrations/   # mcp, http, messaging                                (Java)
+registry/       # workflow, capability, prompt, model                      (Java)
+observability/  # tracing, metrics, logging                           (Java)
+spring/         # optional Spring Boot starter                        (Java)
+proto/          # pipemesh.proto — the API contract                   (language-neutral)
+sdk/python/     # client SDK + capability worker                           (Python)
+sdk/typescript/ # client SDK + capability worker                           (TypeScript)
+sdk/java/       # remote client (embedding the library is the alternative)
+schemas/        # workflow / capability / model JSON schemas               (language-neutral)
 examples/       # simple-chat, tool-calling, approval-flow, parallel-flow
 ```
 
 ## Roadmap
 
-- **Phase 1** — Workflow JSON, intent resolution, LLM step, skill step, condition, execution
-  context, model & skill registry, messaging provider
+- **Phase 1** — Workflow JSON, intent resolution, LLM step, capability step, condition, execution
+  context, model & capability registry, messaging provider
 - **Phase 2** — MCP, structured output, retry, timeout, streaming, prompt registry
 - **Phase 3** — Persistent state, human approval, resume, parallel execution, event-driven execution
 - **Phase 4** — OpenTelemetry, workflow versioning, evaluation, cost tracking, model routing,
@@ -95,7 +161,7 @@ examples/       # simple-chat, tool-calling, approval-flow, parallel-flow
 Adding a new AI behavior must require **configuration and composition, not runtime changes**:
 
 ```text
-new-workflow.json + new-prompt.md + new-skill.json
+new-workflow.json + new-prompt.md + new-capability.json
 ```
 
 with no edits to `WorkflowExecutor`, the scheduler, model providers, MCP integration, state

@@ -2,7 +2,9 @@
 
 ## Technical Architecture & Design
 
-**A declarative, model-agnostic runtime for building composable AI workflows.**
+**A language-agnostic declarative runtime for AI workflows, implemented in Java.**
+
+**Implementation Language:** Java 21 (core, framework-free) — Python SDK for clients and capabilities
 
 **Status:** Proposed
 **Version:** 0.1
@@ -41,7 +43,7 @@ This project takes a different approach:
 
 Application behavior is described using a JSON-based workflow definition.
 
-The runtime interprets this definition and executes it using pluggable providers and skills.
+The runtime interprets this definition and executes it using pluggable providers and capabilities.
 
 ```text
                     User Input
@@ -61,14 +63,14 @@ The runtime interprets this definition and executes it using pluggable providers
                 │ Workflow Engine│
                 └───────┬────────┘
                         │
-        ┌───────────────┼────────────────┐
-        ▼               ▼                ▼
-      Model           Skill           Approval
-     Provider        Registry          Gateway
-        │               │                │
-        ▼               ▼                ▼
-       LLM          MCP / API /      Human / System
-                    Service
+        ┌───────────────┼───────────────────┐
+        ▼               ▼                   ▼
+      Model         Capability          Approval
+     Provider        Registry            Gateway
+        │               │                   │
+        ▼               ▼                   ▼
+       LLM         MCP / API /        Human / System
+                     Service
 ```
 
 The runtime is intentionally separated from workflow definitions.
@@ -97,7 +99,7 @@ The runtime MUST provide:
 2. Messaging protocol abstraction.
 3. Declarative workflow definitions.
 4. Intent-to-workflow resolution.
-5. Skill/tool abstraction.
+5. Capability/tool abstraction.
 6. MCP integration.
 7. Conditional execution.
 8. Human-in-the-loop operations.
@@ -125,9 +127,14 @@ The runtime is NOT intended to:
 * hide all model-specific capabilities,
 * make every operation LLM-driven,
 * turn every business rule into an LLM decision,
-* require MCP for every external operation.
+* require MCP for every external operation,
+* execute arbitrary code embedded inside a workflow definition,
+* host the application's business logic.
 
 The architecture explicitly favors deterministic code for deterministic operations.
+
+Business logic belongs to the application, not to the runtime. The runtime knows *when* a capability
+should run, never *what* it does internally (§9.8, §23).
 
 ---
 
@@ -168,11 +175,11 @@ Structured result
  ↓
 Deterministic condition
  ↓
-Skill
+Capability
  ↓
 Approval
  ↓
-Skill
+Capability
 ```
 
 This distinction makes the system significantly easier to test, observe, secure, and reason about.
@@ -201,15 +208,15 @@ This distinction makes the system significantly easier to test, observe, secure,
 │                      │  Condition Evaluator              │ │
 │                      └───────────────┬───────────────────┘ │
 │                                      │                     │
-│              ┌───────────────────────┼───────────────────┐ │
-│              ▼                       ▼                   ▼ │
-│        Model Registry         Skill Registry       Prompt Registry
-│              │                       │                   │ │
-└──────────────┼───────────────────────┼───────────────────┼─┘
-               │                       │                   │
-               ▼                       ▼                   ▼
-        OpenAI / Claude         MCP / REST / DB        Prompt Files
-        Local / vLLM            Internal Services
+│         ┌──────────────────┼────────────────────┐          │
+│         ▼                  ▼                    ▼          │
+│   Model Registry   Capability Registry    Prompt Registry   │
+│         │                  │                    │          │
+└─────────┼──────────────────┼────────────────────┼──────────┘
+          │                  │                    │
+          ▼                  ▼                    ▼
+   OpenAI / Claude   MCP / REST / DB         Prompt Files
+   Local / vLLM      Internal Services
 ```
 
 ---
@@ -226,7 +233,7 @@ Defines:
 * intents,
 * workflows,
 * prompts,
-* skills,
+* capabilities,
 * execution policies.
 
 No execution logic lives here.
@@ -362,8 +369,8 @@ Example:
 
     {
       "id": "search_venue",
-      "type": "skill",
-      "skill": "venue_search",
+      "type": "capability",
+      "capability": "venue_search",
       "input": "$.event.location",
       "output": "venues"
     },
@@ -378,8 +385,8 @@ Example:
 
     {
       "id": "create_event",
-      "type": "skill",
-      "skill": "event_creation",
+      "type": "capability",
+      "capability": "event_creation",
       "input": "$.event",
       "output": "createdEvent"
     }
@@ -408,18 +415,18 @@ Invokes a configured model.
 
 ---
 
-## 9.2 Skill
+## 9.2 Capability
 
 Invokes an abstract capability.
 
 ```json
 {
-  "type": "skill",
-  "skill": "venue_search"
+  "type": "capability",
+  "capability": "venue_search"
 }
 ```
 
-The workflow should never need to know whether the skill is implemented using MCP, REST, Java code, or another mechanism.
+The workflow should never need to know whether the capability is implemented using MCP, REST, Java code, or another mechanism.
 
 ---
 
@@ -504,27 +511,98 @@ Allows event-driven workflows.
 
 ---
 
-# 10. Skill Architecture
+## 9.8 Decision — Capability, Not Task
 
-A skill represents a capability.
+Business code owned by the calling application must be reachable from a workflow. An earlier draft
+introduced a separate `task` step type for it. That is rejected.
+
+> **A workflow must not encode the deployment mechanism or the implementation ownership of a
+> capability.** Whether a capability is implemented as an MCP tool, a REST endpoint, a gRPC service,
+> an in-process function or an external worker is a runtime concern.
+>
+> Therefore `task` is **not** a workflow-level step type. Workflows invoke everything through the
+> uniform capability abstraction.
+>
+> `Task` may still exist as an internal runtime concept — an executable unit the engine schedules —
+> but it must not leak into the workflow DSL.
+>
+> Ownership, versioning, deployment model and permissions remain metadata of the capability
+> registration rather than properties of the workflow step.
+
+So a workflow says only this, for business code and external tools alike:
+
+```json
+{
+  "type": "capability",
+  "capability": "calculate_discount"
+}
+```
+
+The registry — not the workflow — knows the difference:
 
 ```text
-Skill
+Workflow
+   │
+   ▼
+Capability
+   │
+   ├── MCP
+   ├── REST
+   ├── gRPC
+   ├── Java function
+   └── Python worker
+```
+
+The two vocabularies stay on opposite sides of the boundary:
+
+```text
+Workflow Step
+      ↓
+Capability Invocation     ← what the workflow expresses
+      ↓
+Execution Task            ← what the runtime schedules
+```
+
+```text
+Capability  →  a capability the workflow invokes
+Task        →  an execution unit the runtime runs
+```
+
+This is what keeps §10's rule intact as the list of supported backends grows — MCP, REST, gRPC,
+Java, Python, Go, a Kubernetes Job, a durable-execution engine, a serverless function. Every one of
+them is a registration detail. None of them is a workflow concept.
+
+---
+
+# 10. Capability Architecture
+
+A capability is a named, invocable unit of work.
+
+```text
+Capability
  │
  ├── Name
  ├── Description
+ ├── Kind             (application | external)
+ ├── Owner
+ ├── Version
+ ├── Permissions
  ├── Input Schema
  ├── Output Schema
  ├── Execution Policy
- └── Provider
+ └── Execution        (how it is invoked)
 ```
 
-Example:
+An externally provided capability:
 
 ```json
 {
   "id": "venue_search",
   "description": "Find suitable venues",
+  "kind": "external",
+  "owner": "platform-team",
+  "version": "1.0",
+  "permissions": ["places.read"],
 
   "inputSchema": {
     "type": "object",
@@ -535,7 +613,7 @@ Example:
     }
   },
 
-  "provider": {
+  "execution": {
     "type": "mcp",
     "server": "places",
     "tool": "search"
@@ -543,10 +621,33 @@ Example:
 }
 ```
 
+A capability backed by the application's own business code:
+
+```json
+{
+  "id": "calculate_discount",
+  "description": "Apply tier-based discount rules",
+  "kind": "application",
+  "owner": "billing-team",
+  "version": "2.1",
+  "permissions": ["billing.price"],
+
+  "execution": {
+    "type": "grpc",
+    "target": "billing-service"
+  }
+}
+```
+
+The workflow sees neither block. It sees `"capability": "calculate_discount"` and
+`"capability": "venue_search"` — indistinguishable by design (§9.8). Everything that differs between
+them — who owns it, how it is deployed, what version is pinned, what it is allowed to touch — is
+registration metadata.
+
 The abstraction allows:
 
 ```text
-Skill
+Capability
  ├── MCP
  ├── REST
  ├── GraphQL
@@ -1002,7 +1103,7 @@ approval.wait_time
 
 # 23. Security Model
 
-Skills should have explicit permissions.
+Capabilities should have explicit permissions.
 
 Example:
 
@@ -1016,14 +1117,14 @@ Example:
 }
 ```
 
-A workflow should not automatically gain access to every registered skill.
+A workflow should not automatically gain access to every registered capability.
 
 Possible policy:
 
 ```text
 Workflow
    ↓
-Allowed Skills
+Allowed Capabilities
    ↓
 Allowed Tools
    ↓
@@ -1031,6 +1132,53 @@ Allowed Resources
 ```
 
 This becomes especially important for MCP.
+
+Permissions are declared on the capability registration, never on the workflow step (§9.8). The
+runtime checks them at invocation time:
+
+```text
+capability invocation
+        ↓
+resolve registration
+        ↓
+permission check
+        ↓
+allowed?  ──no──▶  fail the step
+        │
+       yes
+        ↓
+execute
+```
+
+This is the reason a separate step type for application code would have bought nothing: the
+enforcement point is the registry, not the DSL.
+
+## 23.1 No Inline Code in Workflow Definitions
+
+A workflow definition must never carry executable source code:
+
+```json
+{
+  "type": "code",
+  "code": "import os; ..."
+}
+```
+
+This is rejected by design. Embedding code would drag sandboxing, dependency management,
+deployment, versioning and debugging of a foreign language into the runtime — and would make every
+workflow definition a remote code execution vector.
+
+A workflow may only *name* a capability:
+
+```json
+{
+  "type": "capability",
+  "capability": "calculate_discount"
+}
+```
+
+The code lives in the application or worker that registered it, deployed and versioned on its own
+terms. The runtime resolves the name; it never interprets a body.
 
 ---
 
@@ -1041,7 +1189,7 @@ Everything should be versionable.
 ```text
 Workflow
 Prompt
-Skill
+Capability
 Model configuration
 Schema
 ```
@@ -1061,7 +1209,7 @@ An execution should record exact versions:
   "workflow": "create_event@1.2",
   "prompt": "event_extraction@2.1",
   "model": "reasoning@1",
-  "skills": [
+  "capabilities": [
     "venue_search@1.0"
   ]
 }
@@ -1096,7 +1244,7 @@ Semantic validation should detect:
 * missing step IDs,
 * invalid transitions,
 * cycles where prohibited,
-* missing skills,
+* missing capabilities,
 * missing prompts,
 * invalid schemas,
 * unreachable nodes,
@@ -1111,12 +1259,12 @@ This moves errors from runtime to deployment/startup time.
 ```text
                    WorkflowRuntime
                          │
-          ┌──────────────┼──────────────┐
-          │              │              │
-          ▼              ▼              ▼
-     FlowRegistry   SkillRegistry   ModelRegistry
-          │              │              │
-          └──────────────┼──────────────┘
+          ┌───────────────────┼──────────────────┐
+          │                   │                  │
+          ▼                   ▼                  ▼
+     FlowRegistry     CapabilityRegistry    ModelRegistry
+          │                   │                  │
+          └───────────────────┼──────────────────┘
                          ▼
                   WorkflowExecutor
                          │
@@ -1127,10 +1275,203 @@ This moves errors from runtime to deployment/startup time.
                   ▼              ▼
              StepExecutor    Persistence
                   │
-       ┌──────────┼──────────┐
-       ▼          ▼          ▼
-      LLM        Skill     Approval
+       ┌──────────┼───────────┐
+       ▼          ▼           ▼
+      LLM     Capability   Approval
 ```
+
+---
+
+## 26.1 Client Boundary
+
+The runtime is written in Java, but nothing about a workflow is. Callers reach the runtime through
+a language-neutral gRPC boundary, and SDKs are generated from a single `.proto` contract.
+
+```text
+                 Developer
+                     │
+        ┌────────────┼────────────┐
+        ↓            ↓            ↓
+     Python         Java       TypeScript
+      SDK            SDK          SDK
+        │            │            │
+        └────────────┼────────────┘
+                     │
+                   gRPC
+                     │
+                     ▼
+             ┌───────────────┐
+             │   PipeMesh    │
+             │    Runtime    │
+             │     Java      │
+             └───────┬───────┘
+                     │
+          ┌──────────┼──────────┐
+          ↓          ↓          ↓
+       Workflow    State    Providers
+          │
+      ┌───┴────┐
+      ↓        ↓
+     LLM      MCP
+```
+
+### The proto is the contract
+
+The `.proto` file — not the Java interface — is the authoritative API definition. The Java API is
+one binding among several; the gRPC service is a thin adapter over the same core, never a second
+implementation with its own semantics.
+
+```text
+pipemesh.proto
+      │
+      ├── generated: Python SDK
+      ├── generated: TypeScript SDK
+      └── generated: Java SDK
+
+Core Java API  ──adapter──▶  gRPC service
+```
+
+Consequences the API must respect from day one:
+
+* identifiers are strings, never Java types,
+* execution variables cross the boundary as JSON (`google.protobuf.Struct`),
+* every request and response must be serializable — no in-memory handles,
+* the proto is a versioned artifact like workflows, prompts and capabilities (§24).
+
+### Java has two paths
+
+A Java caller running in the same process should not pay for a network hop:
+
+```text
+Java application ──┬── embedded: import the runtime library (in-process)
+                   └── remote:   gRPC SDK (same contract, separate process)
+```
+
+Both paths expose the same operations. The embedded path is the one the runtime itself uses.
+
+### Two directions of traffic
+
+The boundary carries traffic both ways, and the two directions are not symmetric.
+
+**Outbound — the caller drives the runtime** (unary + server streaming):
+
+```text
+StartExecution      unary            begin a workflow
+SubmitApproval      unary            resume a suspended execution
+GetExecution        unary            current state snapshot
+WatchExecution      server stream    execution events and token stream (§22, §30)
+```
+
+**Inbound — the runtime invokes a capability implemented in an SDK language:**
+
+```text
+Runtime ──▶ needs capability "venue_search" implemented in Python
+```
+
+This cannot be a plain request from the SDK. The chosen mechanism is a long-lived bidirectional
+stream opened by the worker:
+
+```text
+SDK worker ──open bidi stream──▶ Runtime
+                                    │
+           ◀──── CapabilityInvocation ───┤   runtime pushes work
+           ────── CapabilityResult ─────▶│
+```
+
+A worker-initiated stream keeps the SDK reachable without an inbound address, TLS certificate or
+firewall exception on the worker side. The alternative — the runtime dialing a gRPC server hosted
+by the SDK — is simpler but requires every capability worker to be individually addressable.
+
+An SDK-hosted capability is one `CapabilityProvider` implementation among others (§10). It does not replace
+MCP: MCP remains the mechanism for external tools, while SDK capabilities exist for in-language business
+logic that should not be exposed as a tool at all.
+
+### Not in the initial milestone
+
+The boundary is designed early because it constrains the core API shape, but it is not implemented
+in Phase 1 (§45). The first milestone proves the execution model in-process; the proto is written
+alongside it so the API cannot drift into something unserializable.
+
+---
+
+## 26.2 Runtime, SDK and Provider
+
+Three concepts are easy to conflate and must stay separate:
+
+```text
+Runtime   →  the engine: workflow execution, state, scheduling
+SDK       →  how a developer reaches the runtime
+Provider  →  how the runtime reaches the outside world
+```
+
+```text
+┌──────────────────────────────┐
+│      User's application      │
+│  business logic              │
+│          │                   │
+│          ▼                   │
+│     PipeMesh SDK             │
+└──────────────┬───────────────┘
+               │ gRPC
+               ▼
+┌──────────────────────────────┐
+│       PipeMesh Runtime       │
+│  workflow · state · scheduler│
+└──────────────┬───────────────┘
+               │
+       ┌───────┼────────┐
+       ▼       ▼        ▼
+      LLM     MCP     Tasks
+```
+
+The distinction resolves several questions at once. LangChain, OpenAI and MCP are all **providers** —
+optional adapters, never dependencies of the core (§35). A Python or TypeScript package is an
+**SDK** — an access protocol, not a second execution engine. There is exactly one runtime.
+
+## 26.3 Deployment Modes
+
+**Embedded** — a Java application runs the runtime inside its own JVM:
+
+```java
+PipeMesh mesh = PipeMesh.builder()
+    .config("./pipemesh")
+    .build();
+```
+
+**Remote** — any language reaches a runtime process over gRPC:
+
+```bash
+docker run pipemesh/runtime
+```
+
+```python
+mesh = PipeMesh("localhost:8080")
+result = mesh.execute("create_event", {"message": "..."})
+```
+
+**Shared** — several applications, in different languages, use one runtime deployment:
+
+```text
+Python App A ─┐
+Python App B ─┼──▶  PipeMesh cluster
+Java App C ───┘
+```
+
+At that point the runtime is a platform rather than a library, and the state store becomes the
+system of record for every workflow in the organization.
+
+### The SDK must not launch the runtime
+
+An SDK must never spawn the runtime as a subprocess:
+
+```python
+subprocess.Popen(["java", "-jar", "pipemesh.jar"])   # not the architecture
+```
+
+It looks convenient and quietly makes every SDK responsible for process lifecycle, crash handling,
+logging, networking, versioning and containerization. An SDK's job is to talk to a runtime, not to
+operate one.
+
 
 ---
 
@@ -1154,7 +1495,7 @@ Implementations:
 
 ```text
 LlmStepExecutor
-SkillStepExecutor
+CapabilityStepExecutor
 ConditionStepExecutor
 ApprovalStepExecutor
 ParallelStepExecutor
@@ -1258,7 +1599,7 @@ runtime/
 ├── models/
 │   └── models.json
 │
-├── skills/
+├── capabilities/
 │   ├── venue-search.json
 │   └── event-creation.json
 │
@@ -1286,9 +1627,9 @@ Workflow
     transitions
     policies
 
-Skill
+Capability
   knows:
-    capability
+    what it can do
     input/output schema
     provider
 
@@ -1450,6 +1791,20 @@ LangChain becomes an implementation dependency rather than the architecture itse
 
 This prevents framework lock-in.
 
+**Decision:** PipeMesh is not built on LangChain. LangChain is supported as an optional adapter —
+one provider among others — shipped separately (`pipemesh-langchain`) so that the core never
+depends on it:
+
+```text
+                  PipeMesh Runtime
+                         │
+        ┌────────────────┼────────────────┐
+        ↓                ↓                ↓
+   OpenAI adapter    MCP adapter    LangChain adapter
+```
+
+The ecosystem is worth reaching; the dependency is not worth taking.
+
 ---
 
 # 36. Comparison With Existing Systems
@@ -1474,7 +1829,32 @@ LangChain
 
 MCP
     → standardized tool/resource integration
+
+AWS Bedrock AgentCore
+    → managed infrastructure for production agents
 ```
+
+The closest overlap is with managed agent platforms. The separation is one of layer, not of feature
+list:
+
+```text
+              AI APPLICATIONS
+                     │
+      ┌──────────────┴──────────────┐
+      │                             │
+ AI PLATFORM                  AI WORKFLOW
+      │                             │
+ runtime hosting              declarative DSL
+ gateway · identity           execution engine
+ memory · tools               state · approval
+      │                             │
+ tied to one cloud            provider agnostic
+```
+
+A managed platform answers *"where does my agent run?"*. PipeMesh answers *"how does this workflow
+proceed?"*. They compose rather than compete: such a platform can host the runtime, its gateway can
+appear as an MCP-backed capability, and its models can be registered as a model provider — none of which
+requires the workflow definition to change.
 
 The proposed architecture combines these ideas around a single principle:
 
@@ -1618,7 +1998,7 @@ Continue
 ```text
 pipemesh/
 │
-├── core/
+├── core/                    # Java — no framework dependency
 │   ├── workflow/
 │   ├── execution/
 │   ├── state/
@@ -1637,7 +2017,7 @@ pipemesh/
 │
 ├── registry/
 │   ├── workflow/
-│   ├── skill/
+│   ├── capability/
 │   ├── prompt/
 │   └── model/
 │
@@ -1648,8 +2028,13 @@ pipemesh/
 │
 ├── schemas/
 │   ├── workflow.schema.json
-│   ├── skill.schema.json
+│   ├── capability.schema.json
 │   └── model.schema.json
+│
+├── spring/                  # Java — optional Spring Boot starter
+│
+├── sdk/
+│   └── python/              # Python — client SDK and capability authoring
 │
 └── examples/
     ├── simple-chat/
@@ -1657,6 +2042,11 @@ pipemesh/
     ├── approval-flow/
     └── parallel-flow/
 ```
+
+The core is Java; the workflow, capability and model artifacts are language-neutral JSON. A capability may be
+implemented in any language behind the capability provider boundary, and any language may drive the
+runtime through its remote boundary. Java is an implementation detail of the engine, never of a
+workflow.
 
 ---
 
@@ -1674,7 +2064,7 @@ The workflow should not depend on a specific LLM provider.
 
 ### 3. Tool agnostic
 
-MCP is a provider, not the definition of a skill.
+MCP is a provider, not the definition of a capability.
 
 ### 4. Deterministic where possible
 
@@ -1694,7 +2084,7 @@ Long-running workflows must survive process failures.
 
 ### 8. Version everything
 
-Workflow, prompt, skill, schema and model configuration should be versioned.
+Workflow, prompt, capability, schema and model configuration should be versioned.
 
 ### 9. Observable by default
 
@@ -1713,7 +2103,7 @@ The entire system can ultimately be reduced to five primitives:
 ```text
 Workflow
 Step
-Skill
+Capability
 Provider
 Execution
 ```
@@ -1725,7 +2115,7 @@ Workflow
    │
    ├── Step
    │    ├── LLM
-   │    ├── Skill
+   │    ├── Capability
    │    ├── Condition
    │    ├── Approval
    │    ├── Parallel
@@ -1735,7 +2125,7 @@ Workflow
    ├── Policy
    └── Version
 
-Skill
+Capability
    │
    └── Provider
 
@@ -1783,9 +2173,9 @@ The target architecture is:
                       │           │
           ┌───────────┘           └────────────┐
           ▼                                    ▼
- ┌─────────────────┐                  ┌─────────────────┐
- │  Model Registry │                  │  Skill Registry │
- └────────┬────────┘                  └────────┬────────┘
+ ┌─────────────────┐              ┌──────────────────────┐
+ │  Model Registry │              │  Capability Registry │
+ └────────┬────────┘              └──────────┬───────────┘
           │                                    │
           ▼                                    ▼
  ┌─────────────────┐            ┌────────────────────────┐
@@ -1830,7 +2220,7 @@ The workflow runtime should remain stable.
 ```text
 Models        → replaceable
 Providers     → replaceable
-Skills        → replaceable
+Capabilities        → replaceable
 Prompts       → versioned
 Workflows     → declarative
 Runtime       → stable
@@ -1855,11 +2245,11 @@ Implement only:
 Workflow JSON
 Intent
 LLM Step
-Skill Step
+Capability Step
 Condition
 Execution Context
 Model Registry
-Skill Registry
+Capability Registry
 Messaging Provider
 ```
 
@@ -1914,7 +2304,7 @@ For example:
 ```text
 new-workflow.json
 new-prompt.md
-new-skill.json
+new-capability.json
 ```
 
 without changing:
@@ -1934,7 +2324,7 @@ If adding a new workflow requires modifying the engine, the abstraction is leaki
 
 If adding a new model requires modifying workflows, the provider abstraction is leaking.
 
-If adding a new MCP tool requires modifying the executor, the skill abstraction is leaking.
+If adding a new MCP tool requires modifying the executor, the capability abstraction is leaking.
 
 A successful implementation keeps these boundaries stable.
 
@@ -1942,7 +2332,7 @@ A successful implementation keeps these boundaries stable.
 
 # 47. One-Sentence Definition
 
-> **A model-agnostic, provider-independent, declarative workflow runtime for building durable AI applications from versioned workflows, prompts, skills, tools, and human decisions.**
+> **A model-agnostic, provider-independent, declarative workflow runtime for building durable AI applications from versioned workflows, prompts, capabilities, tools, and human decisions.**
 
 This is the architectural foundation.
 
