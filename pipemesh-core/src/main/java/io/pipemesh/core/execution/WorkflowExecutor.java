@@ -139,6 +139,7 @@ public final class WorkflowExecutor {
     private StepRecord historyEntry(
             ExecutionRecord record, Step step, StepResult result, long startedAt, long finishedAt) {
 
+        Map<String, JsonNode> attributes = attributesOf(result);
         return new StepRecord(
                 record.executionId(),
                 step.id(),
@@ -146,13 +147,44 @@ public final class WorkflowExecutor {
                 outcomeOf(result),
                 step.config(),
                 outputOf(result),
-                "",
-                "",
-                0L,
-                0L,
+                text(attributes, StepAttributes.LLM_MODEL),
+                text(attributes, StepAttributes.LLM_PROMPT_VERSION),
+                number(attributes, StepAttributes.LLM_INPUT_TOKENS),
+                number(attributes, StepAttributes.LLM_OUTPUT_TOKENS),
                 finishedAt - startedAt,
                 startedAt,
-                finishedAt);
+                finishedAt,
+                asJson(attributes));
+    }
+
+    /**
+     * Whatever the step said about its own run. The engine does not read these
+     * beyond lifting four well-known names into typed columns
+     * ({@link StepAttributes}).
+     */
+    private Map<String, JsonNode> attributesOf(StepResult result) {
+        return switch (result) {
+            case StepResult.Continue moved -> moved.attributes();
+            case StepResult.Failed failure -> failure.attributes();
+            case StepResult.Suspend ignored -> Map.of();
+            case StepResult.Terminate ignored -> Map.of();
+        };
+    }
+
+    private String text(Map<String, JsonNode> attributes, String name) {
+        JsonNode value = attributes.get(name);
+        return value == null ? "" : value.asText("");
+    }
+
+    private long number(Map<String, JsonNode> attributes, String name) {
+        JsonNode value = attributes.get(name);
+        return value == null ? 0L : value.asLong(0L);
+    }
+
+    private ObjectNode asJson(Map<String, JsonNode> attributes) {
+        ObjectNode json = JsonNodeFactory.instance.objectNode();
+        attributes.forEach(json::set);
+        return json;
     }
 
     private StepRecord.StepOutcome outcomeOf(StepResult result) {
@@ -238,6 +270,7 @@ public final class WorkflowExecutor {
                 JsonNodeFactory.instance.objectNode()
                         .put("code", "execution.step_budget_exhausted")
                         .put("budget", stepBudget),
-                "", "", 0L, 0L, 0L, now, now));
+                "", "", 0L, 0L, 0L, now, now,
+                JsonNodeFactory.instance.objectNode()));
     }
 }

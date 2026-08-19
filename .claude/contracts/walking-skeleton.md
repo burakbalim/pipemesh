@@ -551,7 +551,51 @@ state'in taşınmadığını gerçekten kanıtlıyor. Kanıtlamadığı şey: JV
 transaction'ın ortasında ölmesi. Onun için ayrı JVM fork'u gerekir; optimistic locking + tek
 transaction bunu tasarımsal olarak karşılıyor ama test etmiyor.
 
-### Sıradaki — Aşama 4
+### Aşama 4a — LLM ve capability step'leri (2026-08-19) ✅
+
+Dilimin tam zinciri tek testte koşuyor: **LLM → condition → capability → approval → resume**.
+78 test yeşil (72 core + 6 Postgres). Model ve capability bu aşamada dublör; ikisi de aynı
+arayüzün arkasında, gerçek provider takıldığında workflow değişmiyor.
+
+```
+core/prompt/          PromptId, PromptTemplate, PromptRegistry, InMemoryPromptRegistry
+core/model/           InMemoryModelRegistry
+core/capability/      InMemoryCapabilityRegistry
+core/execution/       StepAttributes
+core/execution/step/  LlmStepExecutor, CapabilityStepExecutor
+```
+
+**Tasarım kararları:**
+
+- **Step telemetrisi generic.** `StepResult.Continue` ve `Failed` artık `attributes` taşıyor;
+  motor bunları yorumlamadan step history'ye yazıyor. Dört isim (`llm.model`,
+  `llm.prompt_version`, `llm.input_tokens`, `llm.output_tokens`) tipli sütunlara kaldırılıyor —
+  bu bir *adlandırma konvansiyonu* (OTel semantic conventions ruhunda), motorun LLM'i anlaması
+  değil. Motorun hiç duymadığı bir step tipi de istediğini raporlayabilir, kaybetmez.
+  `workflow_step_history.attributes` (JSONB) sütunu eklendi.
+- **Başarısızlık da maliyet taşır.** `Failed` de attributes alıyor: token harcayıp sonra düşen
+  bir model çağrısı o token'ları yine de harcadı.
+- **Prompt versiyonu id'nin parçası** (`venue_booking.extraction.v1`), arama parametresi değil.
+  Workflow yazıldığı metni sabitliyor; yeni versiyon yeni artefakt, çalışan workflow'un altındaki
+  bir düzenleme değil (§11, §24).
+- **Prompt şablonu yalnızca ikame yapıyor** — koşul yok, döngü yok, ifade yok. Prompt içindeki
+  bir template motoru, kimsenin seçmediği ikinci bir programlama dilidir ve orada büyüyen mantık
+  workflow'un her testinin dışında kalır. Bir test bunu kilitliyor: ikame edilen metin tekrar
+  şablon olarak işlenmiyor (`doesNotTreatSubstitutedTextAsATemplate`).
+- **`CapabilityStepExecutor` provider'ı `execution.type` ile seçiyor.** Beşinci bir taşıma türü
+  eklemek ne bu sınıfı ne de bir workflow'u değiştiriyor. Bir test workflow JSON'ında "mcp"
+  kelimesinin geçmediğini doğruluyor.
+- **İkisi de provider I/O ve persist'ten önce çalışıyor** — transaction sınırı korunuyor.
+
+**Yapılmayan:** permission enforcement. `CapabilityDescriptor.permissions` okunuyor ama kontrol
+edilmiyor; kimin çalıştırdığı bilgisi (principal) henüz yok. Contract #8'e ait (§23).
+
+### Sıradaki — Aşama 4b
+
+Gerçek MCP client (`pipemesh-mcp`, `io.modelcontextprotocol.sdk:mcp`, stdio) ve tek somut
+`MessagingProvider`. **LLM provider kararı (#5) burada gerekiyor.**
+
+### Aşama 4 planı
 
 `LlmStepExecutor` + tek model provider, `CapabilityStepExecutor` + MCP client. Bu aşamanın kritik
 kuralı: ikisi de transaction sınırının **dışında** çağrılmalı (`WorkflowExecutor` step'i

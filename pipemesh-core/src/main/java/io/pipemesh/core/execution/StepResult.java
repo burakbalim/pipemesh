@@ -14,16 +14,28 @@ import java.util.Optional;
  */
 public sealed interface StepResult {
 
-    /** Move on, writing {@code variables} into the execution context. */
-    record Continue(StepId nextStep, Map<String, JsonNode> variables) implements StepResult {
+    /**
+     * Move on, writing {@code variables} into the execution context.
+     *
+     * <p>{@code attributes} is what the step reports about its own run — tokens
+     * spent, model used. The engine stores it without interpreting it
+     * ({@link StepAttributes}).
+     */
+    record Continue(StepId nextStep, Map<String, JsonNode> variables, Map<String, JsonNode> attributes)
+            implements StepResult {
 
         public Continue {
             Objects.requireNonNull(nextStep, "next step");
             variables = Map.copyOf(variables == null ? Map.of() : variables);
+            attributes = Map.copyOf(attributes == null ? Map.of() : attributes);
+        }
+
+        public Continue(StepId nextStep, Map<String, JsonNode> variables) {
+            this(nextStep, variables, Map.of());
         }
 
         public static Continue to(StepId nextStep) {
-            return new Continue(nextStep, Map.of());
+            return new Continue(nextStep, Map.of(), Map.of());
         }
     }
 
@@ -53,12 +65,24 @@ public sealed interface StepResult {
         }
     }
 
-    /** The step did not produce a result. {@code retryable} is advice to the policy layer. */
-    record Failed(String code, String message, boolean retryable) implements StepResult {
+    /**
+     * The step did not produce a result. {@code retryable} is advice to the
+     * policy layer.
+     *
+     * <p>A failure carries attributes too: a model call that failed after
+     * spending tokens still spent them.
+     */
+    record Failed(String code, String message, boolean retryable, Map<String, JsonNode> attributes)
+            implements StepResult {
 
         public Failed {
             Objects.requireNonNull(code, "failure code");
             message = message == null ? "" : message;
+            attributes = Map.copyOf(attributes == null ? Map.of() : attributes);
+        }
+
+        public Failed(String code, String message, boolean retryable) {
+            this(code, message, retryable, Map.of());
         }
     }
 }

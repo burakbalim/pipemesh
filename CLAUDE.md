@@ -9,9 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Workflows are versioned JSON artifacts. The runtime compiles them into an execution graph and runs
 them through pluggable providers, with durable state so an execution survives process restarts.
 
-**Current status: first slice, stage 3 of 6.** A workflow defined entirely in JSON runs end to
-end, suspends at a human approval, and resumes in a different process — the durability claim is
-covered by a Testcontainers test. Not yet there: LLM and MCP steps, observability.
+**Current status: first slice, stage 4 of 6.** The whole chain runs from JSON — LLM, condition,
+capability, approval, resume — and survives a restart. The model and the capability are test
+doubles so far; a real provider and a real MCP client are next, then observability.
 
 ```
 DESIGN.md                      # full technical architecture (47 sections)

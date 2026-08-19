@@ -9,7 +9,8 @@ import java.util.Objects;
 
 /**
  * One entry of an execution's step history — the durable half of a trace (§22).
- * Token counts and prompt version are only set for model-backed steps.
+ * Token counts and prompt version are only set for model-backed steps; whatever
+ * else a step reported about itself is kept verbatim in {@code attributes}.
  */
 public record StepRecord(
         ExecutionId executionId,
@@ -24,7 +25,8 @@ public record StepRecord(
         long outputTokens,
         long latencyMillis,
         long startedAtEpochMillis,
-        long finishedAtEpochMillis) {
+        long finishedAtEpochMillis,
+        JsonNode attributes) {
 
     public StepRecord {
         Objects.requireNonNull(executionId, "execution id");
