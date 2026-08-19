@@ -18,6 +18,7 @@ import java.util.Optional;
  */
 public record ExecutionSnapshot(
         ExecutionId executionId,
+        OrganizationId organization,
         WorkflowId workflowId,
         WorkflowVersion workflowVersion,
         ExecutionStatus status,
@@ -28,6 +29,7 @@ public record ExecutionSnapshot(
 
     public ExecutionSnapshot {
         Objects.requireNonNull(executionId, "execution id");
+        organization = organization == null ? OrganizationId.DEFAULT : organization;
         Objects.requireNonNull(workflowId, "workflow id");
         Objects.requireNonNull(workflowVersion, "workflow version");
         Objects.requireNonNull(status, "status");

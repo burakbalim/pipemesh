@@ -150,9 +150,10 @@ class FullSliceTest {
 
     private ExecutionHandle startBooking() {
         try {
-            return runtime.start(WorkflowId.of("venue_booking"),
+            return runtime.start(ExecutionRequest.of(
+                    WorkflowId.of("venue_booking"),
                     new ExecutionInput((ObjectNode) JSON.readTree(
-                            "{\"message\":\"Book a hall in Antalya tomorrow\"}")));
+                            "{\"message\":\"Book a hall in Antalya tomorrow\"}"))));
         } catch (Exception malformed) {
             throw new IllegalStateException(malformed);
         }

@@ -1,7 +1,5 @@
 package io.pipemesh.core.execution;
 
-import io.pipemesh.core.workflow.WorkflowId;
-
 import java.util.Optional;
 
 /**
@@ -17,7 +15,7 @@ import java.util.Optional;
  */
 public interface WorkflowRuntime {
 
-    ExecutionHandle start(WorkflowId workflowId, ExecutionInput input);
+    ExecutionHandle start(ExecutionRequest request);
 
     ExecutionHandle resume(ExecutionId executionId, ResumeSignal signal);
 

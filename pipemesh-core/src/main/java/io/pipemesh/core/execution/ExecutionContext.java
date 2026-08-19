@@ -19,6 +19,7 @@ import java.util.Objects;
  */
 public record ExecutionContext(
         ExecutionId executionId,
+        OrganizationId organization,
         WorkflowId workflowId,
         WorkflowVersion workflowVersion,
         StepId currentStep,
@@ -26,6 +27,7 @@ public record ExecutionContext(
 
     public ExecutionContext {
         Objects.requireNonNull(executionId, "execution id");
+        organization = organization == null ? OrganizationId.DEFAULT : organization;
         Objects.requireNonNull(workflowId, "workflow id");
         Objects.requireNonNull(workflowVersion, "workflow version");
         Objects.requireNonNull(currentStep, "current step");
@@ -42,13 +44,15 @@ public record ExecutionContext(
     }
 
     public ExecutionContext at(StepId step) {
-        return new ExecutionContext(executionId, workflowId, workflowVersion, step, variables);
+        return new ExecutionContext(
+                executionId, organization, workflowId, workflowVersion, step, variables);
     }
 
     /** Returns a context with {@code additions} merged over the current variables. */
     public ExecutionContext with(Map<String, JsonNode> additions) {
         ObjectNode merged = variables.deepCopy();
         additions.forEach(merged::set);
-        return new ExecutionContext(executionId, workflowId, workflowVersion, currentStep, merged);
+        return new ExecutionContext(
+                executionId, organization, workflowId, workflowVersion, currentStep, merged);
     }
 }

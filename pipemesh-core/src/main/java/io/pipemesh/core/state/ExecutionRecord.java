@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.pipemesh.core.execution.ExecutionId;
 import io.pipemesh.core.execution.ExecutionStatus;
+import io.pipemesh.core.execution.OrganizationId;
 import io.pipemesh.core.workflow.StepId;
 import io.pipemesh.core.workflow.WorkflowId;
 import io.pipemesh.core.workflow.WorkflowVersion;
@@ -26,6 +27,7 @@ import java.util.Objects;
  */
 public record ExecutionRecord(
         ExecutionId executionId,
+        OrganizationId organization,
         WorkflowId workflowId,
         WorkflowVersion workflowVersion,
         ExecutionStatus status,
@@ -38,6 +40,7 @@ public record ExecutionRecord(
 
     public ExecutionRecord {
         Objects.requireNonNull(executionId, "execution id");
+        organization = organization == null ? OrganizationId.DEFAULT : organization;
         Objects.requireNonNull(workflowId, "workflow id");
         Objects.requireNonNull(workflowVersion, "workflow version");
         Objects.requireNonNull(status, "status");

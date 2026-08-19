@@ -17,6 +17,7 @@ class ExecutionContextTest {
     private static ExecutionContext context(ObjectNode variables) {
         return new ExecutionContext(
                 ExecutionId.of("exec-1"),
+                OrganizationId.DEFAULT,
                 WorkflowId.of("venue_booking"),
                 WorkflowVersion.of("1.0"),
                 StepId.of("extract"),

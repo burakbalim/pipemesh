@@ -650,10 +650,49 @@ pipe'lar üzerinden oluyor. npm registry, ağ ya da kurulu Node gerekmiyor; CI'd
 **Kabul kriteri karşılandı:** `WorkflowOverMcpTest` bir workflow'u gerçek MCP tool'una kadar
 koşturuyor ve workflow JSON'ında "mcp" kelimesinin geçmediğini doğruluyor.
 
-### Sıradaki — Aşama 5
+### Aşama 5 — Observability (2026-08-20) ✅
 
-Observability: trace/span, §22'deki metrikler ve **restart sonrası trace devamlılığı**
-(`ExecutionRecord.traceContext` Aşama 3'ten beri persist ediliyor, artık kullanılacak).
+**114 test yeşil** (87 core + 8 Postgres + 10 provider + 9 MCP).
+
+```
+core/observability/  ExecutionObserver, ExecutionEvent, StepEvent, CompositeExecutionObserver,
+                     LoggingExecutionObserver, TraceContext, TelemetryAttributes
+core/execution/      OrganizationId, ExecutionRequest
+```
+
+İki gereksinim tasarımı şekillendirdi: **organizasyon bazlı** ve **birden fazla observability
+aracı** (New Relic, Datadog vb.).
+
+- **Vendor başına adaptör yazılmadı.** Datadog, New Relic, Grafana, Honeycomb hepsi OTLP yutuyor;
+  doğru cevap tek bir OTLP exporter'ı, vendor modülü ancak native API isteyen için gerekli.
+  `CompositeExecutionObserver` aynı anda birkaç backend'e dağıtıyor — backend değiştiren bir
+  organizasyon bir hafta ikisine birden gönderebilmeli.
+- **`ExecutionObserver`'ın her metodu default.** Sonradan gelecek bir olay (retry, branch join,
+  bütçe uyarısı) bugün yazılmış bir implementasyonu bozmamalı. Genişlemeye açıklık burada.
+- **Observer bir execution'ı düşüremez.** Fırlattığı her şey motora ulaşmadan yutuluyor; hangi
+  observer'ın patladığı `onFailure` ile bildiriliyor — sessizce yutmak bozuk bir exporter'ın bir
+  ay fark edilmemesinin yoludur. İki test: bozuk exporter workflow'u düşürmüyor, ve bozuk olan
+  sağlamı susturmuyor.
+- **Organizasyon ilk yazımdan itibaren taşınıyor** (`workflow_execution.organization_id` +
+  `(organization_id, workflow_id, created_at)` index'i, WAITING index'i de organizasyonla
+  başlıyor). Sonradan eklemek her satırı migrate etmek ve her dashboard'u yeniden etiketlemek
+  demekti. Tek kiracılı kurulum hiç düşünmek zorunda değil — `OrganizationId.DEFAULT`.
+- **`ExecutionRequest` nesnesi.** Parametre listesini genişletmek yerine istek nesnesi: idempotency
+  key, deadline, principal, priority — hepsi olası sonraki alanlar ve her biri aksi halde tüm
+  çağıranları ve proto binding'ini kırardı.
+- **Trace bir bekleyişi aşıyor.** Üç gün approval bekleyip başka bir process'te biten bir
+  execution doğal olarak iki alakasız trace üretirdi — tam da birinin ne olduğunu anlamaya
+  çalıştığı anda. `traceparent` state ile persist ediliyor, resume'da geri okunuyor. Çağıran zaten
+  bir trace içindeyse `ExecutionRequest.within(traceparent)` ile workflow onun altına asılıyor.
+  Postgres testi bunu restart'ın iki yakasında doğruluyor.
+
+**Etiketleme izolasyon değil.** Bir organizasyonun diğerinin execution'larını okuyamaması ve
+tüketimin ölçülmesi ayrı bir iş — contract #17.
+
+### Sıradaki — Aşama 6
+
+`examples/approval-flow/` config repo'su, ikinci örnek workflow ve `proto/pipemesh.proto`
+(implementasyon yok). Dilim orada kapanıyor.
 
 ### Aşama 4 planı
 

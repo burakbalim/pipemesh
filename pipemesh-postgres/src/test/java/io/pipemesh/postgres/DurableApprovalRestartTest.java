@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.pipemesh.core.execution.DefaultWorkflowRuntime;
 import io.pipemesh.core.execution.ExecutionHandle;
 import io.pipemesh.core.execution.ExecutionInput;
+import io.pipemesh.core.execution.ExecutionRequest;
+import io.pipemesh.core.execution.OrganizationId;
 import io.pipemesh.core.execution.ExecutionSnapshot;
 import io.pipemesh.core.execution.ExecutionStatus;
 import io.pipemesh.core.execution.ResumeSignal;
@@ -133,7 +135,8 @@ class DurableApprovalRestartTest {
     void resumesAWaitingExecutionInAProcessThatNeverStartedIt() {
         Process before = boot();
         ExecutionHandle waiting =
-                before.runtime().start(WorkflowId.of("venue_booking"), input("{\"price\":250}"));
+                before.runtime().start(ExecutionRequest.of(
+                        WorkflowId.of("venue_booking"), input("{\"price\":250}")));
 
         assertEquals(ExecutionStatus.WAITING, waiting.status());
 
@@ -151,7 +154,8 @@ class DurableApprovalRestartTest {
     void keepsTheVariablesItWasSuspendedWith() {
         Process before = boot();
         ExecutionHandle waiting =
-                before.runtime().start(WorkflowId.of("venue_booking"), input("{\"price\":250}"));
+                before.runtime().start(ExecutionRequest.of(
+                        WorkflowId.of("venue_booking"), input("{\"price\":250}")));
 
         ExecutionSnapshot snapshot =
                 boot().runtime().snapshot(waiting.executionId()).orElseThrow();
@@ -165,7 +169,8 @@ class DurableApprovalRestartTest {
     void keepsThePendingApprovalAcrossTheRestart() {
         Process before = boot();
         ExecutionHandle waiting =
-                before.runtime().start(WorkflowId.of("venue_booking"), input("{\"price\":250}"));
+                before.runtime().start(ExecutionRequest.of(
+                        WorkflowId.of("venue_booking"), input("{\"price\":250}")));
 
         List<ApprovalRecord> pending = boot().approvals().pendingFor(waiting.executionId());
 
@@ -177,7 +182,8 @@ class DurableApprovalRestartTest {
     void keepsTheStepHistoryOfBothProcesses() {
         Process before = boot();
         ExecutionHandle waiting =
-                before.runtime().start(WorkflowId.of("venue_booking"), input("{\"price\":250}"));
+                before.runtime().start(ExecutionRequest.of(
+                        WorkflowId.of("venue_booking"), input("{\"price\":250}")));
 
         Process after = boot();
         after.runtime().resume(waiting.executionId(),
@@ -201,7 +207,8 @@ class DurableApprovalRestartTest {
     void appliesTheSameDecisionOnceEvenAcrossProcesses() {
         Process before = boot();
         ExecutionHandle waiting =
-                before.runtime().start(WorkflowId.of("venue_booking"), input("{\"price\":250}"));
+                before.runtime().start(ExecutionRequest.of(
+                        WorkflowId.of("venue_booking"), input("{\"price\":250}")));
         ResumeSignal signal =
                 new ResumeSignal.Approval(approvalIdOf(waiting), true, "burak", "");
 
@@ -216,10 +223,45 @@ class DurableApprovalRestartTest {
     }
 
     @Test
+    void resumesIntoTheSameTraceItWasSuspendedIn() {
+        Process before = boot();
+        ExecutionHandle waiting = before.runtime().start(ExecutionRequest.of(
+                        WorkflowId.of("venue_booking"), input("{\"price\":250}")));
+
+        String traceWhileWaiting =
+                before.stateStore().find(waiting.executionId()).orElseThrow().traceContext();
+
+        Process after = boot();
+        after.runtime().resume(waiting.executionId(),
+                new ResumeSignal.Approval(approvalIdOf(waiting), true, "burak", ""));
+
+        String traceAfterResume =
+                after.stateStore().find(waiting.executionId()).orElseThrow().traceContext();
+
+        assertEquals(traceWhileWaiting, traceAfterResume,
+                "an execution resumed in another process must stay in one trace");
+        assertTrue(traceAfterResume.startsWith("00-"));
+    }
+
+    @Test
+    void keepsTheOrganizationAcrossTheRestart() {
+        Process before = boot();
+        ExecutionHandle waiting = before.runtime().start(new ExecutionRequest(
+                WorkflowId.of("venue_booking"), input("{\"price\":250}"),
+                OrganizationId.of("acme"), null));
+
+        ExecutionSnapshot snapshot =
+                boot().runtime().snapshot(waiting.executionId()).orElseThrow();
+
+        assertEquals(OrganizationId.of("acme"), snapshot.organization());
+    }
+
+    @Test
     void rejectsAWriteMadeFromStaleState() {
         Process process = boot();
         ExecutionHandle waiting =
-                process.runtime().start(WorkflowId.of("venue_booking"), input("{\"price\":250}"));
+                process.runtime().start(ExecutionRequest.of(
+                        WorkflowId.of("venue_booking"), input("{\"price\":250}")));
 
         var stale = process.stateStore().find(waiting.executionId()).orElseThrow();
         process.runtime().resume(waiting.executionId(),

@@ -1145,6 +1145,87 @@ approval.wait_time
 
 ---
 
+## 22.1 One Boundary, Many Backends
+
+Telemetry leaves the runtime through a single narrow interface:
+
+```text
+                    WorkflowExecutor
+                           │
+                    ExecutionObserver
+                           │
+              ┌────────────┼────────────┐
+              ▼            ▼            ▼
+         OpenTelemetry   Logging     (native)
+              │
+    ┌─────────┼─────────┬──────────┐
+    ▼         ▼         ▼          ▼
+ Datadog  New Relic  Grafana   Honeycomb
+```
+
+There is deliberately no adapter per vendor. Datadog, New Relic, Grafana and
+Honeycomb all ingest OpenTelemetry, so an OTLP exporter reaches all of them and a
+vendor module is only worth writing for someone who wants a native API. Several
+observers can run at once — an organization migrating from one backend to another
+should be able to send to both for a week.
+
+Two properties matter more than the interface itself:
+
+* **Every method has a default.** A later event — a retry, a branch join, a budget
+  warning — must not break an implementation written today.
+* **An observer cannot fail an execution.** Whatever it throws is contained before
+  it reaches the engine. Telemetry going dark is a bad day; telemetry taking a
+  workflow down is an outage.
+
+## 22.2 Organization as a Dimension
+
+Every execution carries the organization it belongs to, and every span and metric
+is labelled with it:
+
+```text
+pipemesh.organization
+pipemesh.workflow.id
+pipemesh.execution.id
+pipemesh.step.id
+```
+
+It is carried from the first write rather than added when multi-tenancy becomes
+urgent. An owner decides which rows a query may return and which series a metric
+lands in; retrofitting it means migrating every row and re-labelling every
+dashboard. A single-tenant deployment never has to think about it — the value
+defaults.
+
+Note what this is *not* yet: labelling is not isolation. Enforcing that one
+organization cannot read another's executions, and metering what each consumes,
+belong to a separate piece of work.
+
+## 22.3 One Trace Across a Wait
+
+A durable workflow breaks tracing in a way an ordinary request does not. An
+execution that waits three days for an approval and then finishes in a different
+process would naturally produce two unrelated traces — precisely at the moment
+someone is trying to understand what happened.
+
+So the trace context is persisted with the execution state and read back on
+resume:
+
+```text
+start          →  trace generated, or inherited from the caller
+suspend        →  traceparent written with the state
+<process ends>
+resume         →  traceparent read back, spans continue the same trace
+```
+
+A caller that is already inside a trace passes its `traceparent` in with the
+request, so the workflow appears underneath what asked for it rather than as a
+trace of its own.
+
+This is why the state schema carries a trace column from the beginning. It is the
+one part of observability that cannot be added later without rewriting history.
+
+
+---
+
 # 23. Security Model
 
 Capabilities should have explicit permissions.

@@ -2,6 +2,10 @@
 
 CREATE TABLE workflow_execution (
     execution_id      TEXT PRIMARY KEY,
+    -- Carried from the first write: it decides which rows a query may return and
+    -- which series a metric lands in, and adding it later means migrating every
+    -- row and re-labelling every dashboard.
+    organization_id   TEXT        NOT NULL DEFAULT 'default',
     workflow_id       TEXT        NOT NULL,
     workflow_version  TEXT        NOT NULL,
     status            TEXT        NOT NULL,
@@ -16,8 +20,11 @@ CREATE TABLE workflow_execution (
 );
 
 CREATE INDEX workflow_execution_waiting
-    ON workflow_execution (status, updated_at)
+    ON workflow_execution (organization_id, status, updated_at)
     WHERE status = 'WAITING';
+
+CREATE INDEX workflow_execution_by_organization
+    ON workflow_execution (organization_id, workflow_id, created_at DESC);
 
 CREATE TABLE workflow_step_history (
     id                BIGSERIAL PRIMARY KEY,

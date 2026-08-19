@@ -10,6 +10,7 @@ import io.pipemesh.core.capability.InMemoryCapabilityRegistry;
 import io.pipemesh.core.execution.DefaultWorkflowRuntime;
 import io.pipemesh.core.execution.ExecutionHandle;
 import io.pipemesh.core.execution.ExecutionInput;
+import io.pipemesh.core.execution.ExecutionRequest;
 import io.pipemesh.core.execution.ExecutionSnapshot;
 import io.pipemesh.core.execution.ExecutionStatus;
 import io.pipemesh.core.execution.StepExecutors;
@@ -96,8 +97,9 @@ class WorkflowOverMcpTest {
         assertFalse(WORKFLOW.contains("mcp"), "the workflow must not mention the transport");
 
         WorkflowRuntime runtime = runtime();
-        ExecutionHandle finished = runtime.start(WorkflowId.of("find_venue"),
-                new ExecutionInput((ObjectNode) JSON.readTree("{\"location\":\"Antalya\"}")));
+        ExecutionHandle finished = runtime.start(ExecutionRequest.of(
+                WorkflowId.of("find_venue"),
+                new ExecutionInput((ObjectNode) JSON.readTree("{\"location\":\"Antalya\"}"))));
 
         assertEquals(ExecutionStatus.COMPLETED, finished.status());
 

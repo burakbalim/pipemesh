@@ -12,6 +12,7 @@ import io.pipemesh.core.workflow.InMemoryWorkflowRegistry;
 import io.pipemesh.core.workflow.StepId;
 import io.pipemesh.core.workflow.WorkflowCompiler;
 import io.pipemesh.core.workflow.WorkflowDefinitionReader;
+import io.pipemesh.core.workflow.WorkflowId;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -59,7 +60,8 @@ class WorkflowExecutorTest {
     }
 
     private ExecutionRecord run(String workflowJson, String inputJson) {
-        return executor.start(register(workflowJson), ExecutionId.generate(), input(inputJson));
+        return executor.start(register(workflowJson), ExecutionId.generate(),
+                ExecutionRequest.of(WorkflowId.of("ignored"), input(inputJson)));
     }
 
     @Test
@@ -157,7 +159,8 @@ class WorkflowExecutorTest {
                 """);
 
         ExecutionRecord finished =
-                bounded.start(graph, ExecutionId.generate(), input("{\"go\":true}"));
+                bounded.start(graph, ExecutionId.generate(),
+                        ExecutionRequest.of(WorkflowId.of("endless"), input("{\"go\":true}")));
 
         assertEquals(ExecutionStatus.FAILED, finished.status());
 

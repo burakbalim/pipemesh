@@ -68,7 +68,8 @@ class ApprovalResumeTest {
     }
 
     private ExecutionHandle startExpensiveBooking() {
-        return runtime.start(WorkflowId.of("venue_booking"), input("{\"price\":250}"));
+        return runtime.start(ExecutionRequest.of(
+                WorkflowId.of("venue_booking"), input("{\"price\":250}")));
     }
 
     private String approvalIdOf(ExecutionHandle handle) {
@@ -163,7 +164,8 @@ class ApprovalResumeTest {
     @Test
     void skipsTheApprovalEntirelyWhenTheConditionDoesNotAskForOne() {
         ExecutionHandle handle =
-                runtime.start(WorkflowId.of("venue_booking"), input("{\"price\":10}"));
+                runtime.start(ExecutionRequest.of(
+                        WorkflowId.of("venue_booking"), input("{\"price\":10}")));
 
         assertEquals(ExecutionStatus.COMPLETED, handle.status());
         assertTrue(approvals.pendingFor(handle.executionId()).isEmpty());

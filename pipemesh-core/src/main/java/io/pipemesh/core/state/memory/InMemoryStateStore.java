@@ -83,6 +83,7 @@ public final class InMemoryStateStore implements StateStore {
 
         return new ExecutionRecord(
                 record.executionId(),
+                record.organization(),
                 record.workflowId(),
                 record.workflowVersion(),
                 record.status(),

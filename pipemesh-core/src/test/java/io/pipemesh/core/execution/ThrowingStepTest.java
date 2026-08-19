@@ -9,6 +9,7 @@ import io.pipemesh.core.workflow.ExecutionGraph;
 import io.pipemesh.core.workflow.InMemoryWorkflowRegistry;
 import io.pipemesh.core.workflow.Step;
 import io.pipemesh.core.workflow.StepType;
+import io.pipemesh.core.workflow.WorkflowId;
 import io.pipemesh.core.workflow.WorkflowCompiler;
 import io.pipemesh.core.workflow.WorkflowDefinitionReader;
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,8 @@ class ThrowingStepTest {
 
         ExecutionRecord finished = new WorkflowExecutor(stateStore, executors).start(
                 graph, ExecutionId.generate(),
-                new ExecutionInput((ObjectNode) JSON.readTree("{}")));
+                ExecutionRequest.of(WorkflowId.of("fragile"),
+                        new ExecutionInput((ObjectNode) JSON.readTree("{}"))));
 
         assertEquals(ExecutionStatus.FAILED, finished.status());
 

@@ -9,9 +9,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Workflows are versioned JSON artifacts. The runtime compiles them into an execution graph and runs
 them through pluggable providers, with durable state so an execution survives process restarts.
 
-**Current status: first slice, stage 5 of 6.** The whole chain runs from JSON — LLM, condition,
-capability, approval, resume — survives a restart, calls a real model endpoint and reaches real MCP
-tools. Observability is what remains.
+**Current status: first slice, stage 6 of 6.** The whole chain runs from JSON — LLM, condition,
+capability, approval, resume — survives a restart, calls a real model endpoint, reaches real MCP
+tools, and reports itself to pluggable observability backends. What remains is the example config
+repository and the proto.
 
 ```
 DESIGN.md                      # full technical architecture (47 sections)
@@ -116,6 +117,11 @@ passes the tests — say so rather than accepting it.
   execution twice.
 - **Trace context is persisted with the state.** An execution resumed after a restart must attach to
   the same trace, or "observable execution" breaks exactly where it matters most.
+- **Every execution carries its organization**, and every span and metric is labelled with it.
+  Labelling is not isolation — enforcing that boundary is separate work, but the dimension must be
+  there from the first write.
+- **An observer must never fail an execution.** Whatever it throws is contained. Telemetry going
+  dark is a bad day; telemetry taking a workflow down is an outage.
 
 ## Coding Standards
 

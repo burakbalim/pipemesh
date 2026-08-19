@@ -31,11 +31,12 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
     }
 
     @Override
-    public ExecutionHandle start(WorkflowId workflowId, ExecutionInput input) {
-        ExecutionGraph graph = workflows.find(workflowId).orElseThrow(
-                () -> new NoSuchElementException("no workflow registered as '" + workflowId + "'"));
+    public ExecutionHandle start(ExecutionRequest request) {
+        ExecutionGraph graph = workflows.find(request.workflowId()).orElseThrow(
+                () -> new NoSuchElementException(
+                        "no workflow registered as '" + request.workflowId() + "'"));
 
-        return handleOf(executor.start(graph, ExecutionId.generate(), input));
+        return handleOf(executor.start(graph, ExecutionId.generate(), request));
     }
 
     /**
@@ -78,6 +79,7 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
     private ExecutionSnapshot snapshotOf(ExecutionRecord record) {
         return new ExecutionSnapshot(
                 record.executionId(),
+                record.organization(),
                 record.workflowId(),
                 record.workflowVersion(),
                 record.status(),

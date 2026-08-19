@@ -3,6 +3,11 @@ package io.pipemesh.core.execution;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.pipemesh.core.observability.CompositeExecutionObserver;
+import io.pipemesh.core.observability.ExecutionEvent;
+import io.pipemesh.core.observability.ExecutionObserver;
+import io.pipemesh.core.observability.StepEvent;
+import io.pipemesh.core.observability.TraceContext;
 import io.pipemesh.core.state.ExecutionRecord;
 import io.pipemesh.core.state.StateStore;
 import io.pipemesh.core.state.StepRecord;
@@ -52,12 +57,27 @@ public final class WorkflowExecutor {
     private final StepExecutors executors;
     private final Clock clock;
     private final int stepBudget;
+    private final ExecutionObserver observer;
 
     public WorkflowExecutor(StateStore stateStore, StepExecutors executors) {
-        this(stateStore, executors, Clock.systemUTC(), DEFAULT_STEP_BUDGET);
+        this(stateStore, executors, Clock.systemUTC(), DEFAULT_STEP_BUDGET, ExecutionObserver.NONE);
+    }
+
+    public WorkflowExecutor(StateStore stateStore, StepExecutors executors, ExecutionObserver observer) {
+        this(stateStore, executors, Clock.systemUTC(), DEFAULT_STEP_BUDGET, observer);
     }
 
     public WorkflowExecutor(StateStore stateStore, StepExecutors executors, Clock clock, int stepBudget) {
+        this(stateStore, executors, clock, stepBudget, ExecutionObserver.NONE);
+    }
+
+    public WorkflowExecutor(
+            StateStore stateStore,
+            StepExecutors executors,
+            Clock clock,
+            int stepBudget,
+            ExecutionObserver observer) {
+
         this.stateStore = Objects.requireNonNull(stateStore, "state store");
         this.executors = Objects.requireNonNull(executors, "executors");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -65,10 +85,15 @@ public final class WorkflowExecutor {
             throw new IllegalArgumentException("step budget must be positive");
         }
         this.stepBudget = stepBudget;
+        this.observer = CompositeExecutionObserver.guarded(
+                Objects.requireNonNull(observer, "observer"));
     }
 
-    public ExecutionRecord start(ExecutionGraph graph, ExecutionId executionId, ExecutionInput input) {
-        ExecutionRecord created = stateStore.create(initialRecord(graph, executionId, input));
+    public ExecutionRecord start(
+            ExecutionGraph graph, ExecutionId executionId, ExecutionRequest request) {
+
+        ExecutionRecord created = stateStore.create(initialRecord(graph, executionId, request));
+        observer.executionStarted(eventOf(created));
         return drive(graph, created);
     }
 
@@ -87,6 +112,8 @@ public final class WorkflowExecutor {
                     clock.millis(), clock.millis());
         }
 
+        observer.executionResumed(eventOf(record));
+
         long startedAt = clock.millis();
         StepResult result = safely(() -> resumable.resume(step, contextOf(record), signal));
         long finishedAt = clock.millis();
@@ -99,11 +126,32 @@ public final class WorkflowExecutor {
         ExecutionRecord current = from;
         for (int taken = 0; taken < stepBudget; taken++) {
             if (isSettled(current)) {
-                return current;
+                return announce(current);
             }
             current = runStep(graph, current);
         }
-        return exhausted(current);
+        return announce(exhausted(current));
+    }
+
+    private ExecutionRecord announce(ExecutionRecord record) {
+        if (record.status() == ExecutionStatus.WAITING) {
+            observer.executionSuspended(eventOf(record));
+        } else if (record.status().isTerminal()) {
+            observer.executionFinished(eventOf(record));
+        }
+        return record;
+    }
+
+    private ExecutionEvent eventOf(ExecutionRecord record) {
+        return new ExecutionEvent(
+                record.executionId(),
+                record.organization(),
+                record.workflowId(),
+                record.workflowVersion(),
+                record.status(),
+                record.currentStep(),
+                TraceContext.parse(record.traceContext()).orElse(null),
+                clock.millis());
     }
 
     private boolean isSettled(ExecutionRecord record) {
@@ -153,7 +201,14 @@ public final class WorkflowExecutor {
             case StepResult.Failed ignored -> record(record, ExecutionStatus.FAILED,
                     record.currentStep(), record.variables());
         };
-        return stateStore.advance(next, historyEntry(record, step, result, startedAt, finishedAt));
+        StepRecord history = historyEntry(record, step, result, startedAt, finishedAt);
+        ExecutionRecord advanced = stateStore.advance(next, history);
+
+        observer.stepFinished(new StepEvent(
+                eventOf(advanced), step.id(), step.type(), history.outcome(),
+                history.latencyMillis(), attributesOf(result)));
+
+        return advanced;
     }
 
     private StepRecord historyEntry(
@@ -231,6 +286,7 @@ public final class WorkflowExecutor {
     private ExecutionContext contextOf(ExecutionRecord record) {
         return new ExecutionContext(
                 record.executionId(),
+                record.organization(),
                 record.workflowId(),
                 record.workflowVersion(),
                 record.currentStep(),
@@ -244,18 +300,28 @@ public final class WorkflowExecutor {
     }
 
     private ExecutionRecord initialRecord(
-            ExecutionGraph graph, ExecutionId executionId, ExecutionInput input) {
+            ExecutionGraph graph, ExecutionId executionId, ExecutionRequest request) {
 
         ObjectNode variables = JsonNodeFactory.instance.objectNode();
-        variables.set(INPUT_VARIABLE, input.value());
+        variables.set(INPUT_VARIABLE, request.input().value());
+
+        // A caller already inside a trace passes its context in, so the workflow
+        // hangs under the request that asked for it rather than starting a trace
+        // of its own.
+        TraceContext trace = request.traceParentIfAny()
+                .flatMap(TraceContext::parse)
+                .map(TraceContext::child)
+                .orElseGet(TraceContext::generate);
+
         return new ExecutionRecord(
                 executionId,
+                request.organization(),
                 graph.workflowId(),
                 graph.version(),
                 ExecutionStatus.RUNNING,
                 graph.entry(),
                 variables,
-                "",
+                trace.toTraceParent(),
                 0L,
                 0L,
                 0L);
@@ -266,6 +332,7 @@ public final class WorkflowExecutor {
 
         return new ExecutionRecord(
                 from.executionId(),
+                from.organization(),
                 from.workflowId(),
                 from.workflowVersion(),
                 status,
