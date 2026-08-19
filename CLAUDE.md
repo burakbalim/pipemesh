@@ -9,8 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Workflows are versioned JSON artifacts. The runtime compiles them into an execution graph and runs
 them through pluggable providers, with durable state so an execution survives process restarts.
 
-**Current status: first slice, stage 1 of 6.** `pipemesh-core` holds the model types and the
-interfaces; no execution engine yet.
+**Current status: first slice, stage 2 of 6.** A workflow defined entirely in JSON compiles and
+runs end to end (condition and terminal steps, in-memory state). Not yet durable: no persistence,
+no approval, no resume.
 
 ```
 DESIGN.md                      # full technical architecture (47 sections)
@@ -48,10 +49,9 @@ mvn -o -pl pipemesh-core test
 mvn -o test -Dtest=ExecutionContextTest
 ```
 
-`~/.m2/settings.xml` on this machine activates an `artifactory` profile that points `central` at a
-corporate mirror, unreachable outside its VPN — an online build hangs rather than failing. Use
-`-o` (the dependencies are cached) or give personal projects their own settings file. Nothing in
-this repository depends on that mirror.
+If a build hangs rather than failing, check `~/.m2/settings.xml`: an `artifactory` profile there
+can point `central` at a corporate mirror that is unreachable outside its VPN. `-o` works from the
+local cache. Nothing in this repository depends on that mirror.
 
 Dependencies are deliberately few: `jackson-databind` at runtime, `junit-jupiter` for tests. Adding
 one to `core/` should feel like a decision, not a convenience.

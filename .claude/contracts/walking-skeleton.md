@@ -468,7 +468,49 @@ ortamda çözülemiyordu (aşağıya bakın).
 kabul edilemez — kişisel projeler için ayrı bir settings dosyası veya profil devre dışı bırakma
 gerekiyor. Repo'nun kendi pom'u temiz, düzeltme ortam tarafında.
 
-### Sıradaki — Aşama 2
+### Aşama 2 — Compiler + in-memory execution (2026-08-19) ✅
 
-`WorkflowCompiler` (grafik doğrulama), `ConditionStepExecutor`, `TerminalStepExecutor`,
-in-memory `StateStore`. İlk çalışan workflow: condition + terminal.
+İlk uçtan uca koşum: tamamen JSON'la tanımlanmış bir workflow, runtime kodunda hiçbir değişiklik
+olmadan çalışıyor. 48 test yeşil (3 ardışık koşum).
+
+```
+workflow/    WorkflowDefinitionReader, WorkflowFormatException, WorkflowCompiler,
+             WorkflowCompilationException, ExecutionGraph, WorkflowRegistry,
+             InMemoryWorkflowRegistry
+expression/  JsonPath, Comparison, ConditionExpression, ExpressionException
+execution/   StepExecutors, WorkflowExecutor
+execution/step/  ConditionStepExecutor, TerminalStepExecutor
+state/memory/    InMemoryStateStore
+```
+
+**Tasarım kararları:**
+
+- **`StepExecutor.outgoing(Step)` eklendi.** Compiler grafiğin kenarlarını doğrulamak zorunda, ama
+  condition'ın `onTrue`, approval'ın `onApproved` kullandığını bilmemeli — bunu config'i yorumlayan
+  bilir. Kenarları executor'a sormak, core'un hiç duymadığı step tipleri için de kenar
+  doğrulamasının çalışmasını sağlıyor. Bu, "yeni step tipi core'a dokunmamalı" kriterinin
+  compiler tarafındaki karşılığı.
+- **Compiler bulduğu tüm sorunları tek seferde bildiriyor**, ilkinde durmuyor. Bir workflow'u
+  derleme başına bir hata düzelterek onarmak kötü bir gün geçirme biçimi.
+- **Cycle geçerli kabul ediliyor** (retry/clarification loop meşru), ama `WorkflowExecutor`'da
+  koşum başına **step budget** var (varsayılan 1000). Sonsuza dönen bir motor, sebep bildirerek
+  duran bir motordan daha kötü.
+- **Terminal step'ler açık düğüm**, "adım kalmadı" değil. `COMPLETED` ile `CANCELLED` farklı
+  sonuçlar; grafik hangisinin nerede olduğunu göstermeli.
+- **Expression dili kasten fakir:** `and`/`or`, aritmetik, fonksiyon çağrısı yok. Bunlara ihtiyaç
+  duyan bir koşul zaten iş kuralıdır ve bir capability'ye ait (§23.1). Sıralama yalnızca sayılarda
+  tanımlı; string'i sayıyla karşılaştırmak tahmin etmek yerine hata veriyor.
+- **`WorkflowDefinitionReader` step config'ini yorumlamıyor.** Tanımadığı bir step tipi sorunsuz
+  parse oluyor, compile aşamasında tip hakkında bir mesajla düşüyor — JSON hatası gibi değil.
+- **Sıralama garantisi:** `WorkflowExecutor` önce step'i çalıştırıp sonra persist ediyor. Provider
+  I/O'nun açık transaction içinde olmaması bu sıralamayla sağlanıyor; `StateStore.advance` de
+  step history + yeni state'i birlikte yazıyor.
+
+**Bilinçli olarak yapılmayan:** `WorkflowRuntime` implementasyonu. `resume` gerçek olmadan
+(approval executor Aşama 3'te) yarım bir implementasyon bırakmak yerine motor `WorkflowExecutor`
+olarak duruyor; `DefaultWorkflowRuntime` Aşama 3'te gelecek.
+
+### Sıradaki — Aşama 3
+
+Postgres `StateStore`, migration, optimistic locking, `ApprovalStepExecutor`, `resume()`,
+idempotency ve **restart testi** — dilimin asıl tezi burada kanıtlanıyor.
