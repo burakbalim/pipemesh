@@ -26,6 +26,7 @@ onunla çelişmez.
 | 13 | _sdks_ | Python / TypeScript / Java SDK'ları — proto'dan üretilir | Planlanan |
 | 14 | _application-capabilities_ | `kind: application` capability'leri, SDK worker'ları, business code sınırı | Planlanan |
 | 15 | _langchain-adapter_ | §35 opsiyonel LangChain provider'ı (`pipemesh-langchain`) | Planlanan |
+| 16 | _agent-loop_ | §9.9 sınırlı agent step'i — capability listesi, maxIterations, iterasyon izlenebilirliği | Planlanan |
 
 Faz eşlemesi için DESIGN.md §45'e bakın: #1 Phase 1'i, #2–4 Phase 2'yi, #6–7 Phase 3'ü,
 #9–11 Phase 4'ü karşılar. #12 fazlardan bağımsız — #1 tamamlanır tamamlanmaz başlayabilir.
@@ -54,6 +55,20 @@ gRPC (DESIGN.md §26.1); SDK'lar (Python, TypeScript, Java) tek bir `pipemesh.pr
 
 #12 sınırı implemente eder, #13 SDK'ları üretir. #1 hiçbirini implemente etmez ama ikisini de
 mümkün kılacak API şeklini zorunlu kılar.
+
+## SDK fiilleri (§26.4)
+
+SDK'nın üç fiili mevcut contract'lara dağılıyor — yeni bir execution modeli değil:
+
+| Fiil | Karşılığı |
+|---|---|
+| `execute()` | #1 (workflow çalıştırma) + #12/#13 (uzak çağrı) |
+| `process()` | #5 intent resolution — `execute()`'in önüne bir adım ekler |
+| `stream()` | #4 streaming — aynı execution'ı `WatchExecution` ile izler |
+
+`process()` bir workflow *seçer*, çalıştırmaz; `stream()` üçüncü bir çalıştırma yolu değil, aynı
+koşumun gözlenmesidir. Bu ayrım korunmazsa "modeli akışı seçti" sessizce "modeli akışı yönetiyor"a
+dönüşür (§20, §37).
 
 ## Akış
 

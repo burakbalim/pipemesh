@@ -1,5 +1,6 @@
 package io.pipemesh.core.workflow;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,10 @@ public record WorkflowDefinition(
         return steps.stream().filter(step -> step.id().equals(stepId)).findFirst();
     }
 
+    /**
+     * Steps keyed by id, in declaration order — {@code Map.copyOf} is deliberately
+     * not used here, as its iteration order is unspecified and varies per JVM.
+     */
     public Map<StepId, Step> stepsById() {
         Map<StepId, Step> byId = new LinkedHashMap<>();
         for (Step step : steps) {
@@ -38,6 +43,6 @@ public record WorkflowDefinition(
                 throw new IllegalArgumentException("duplicate step id: " + step.id());
             }
         }
-        return Map.copyOf(byId);
+        return Collections.unmodifiableMap(byId);
     }
 }

@@ -574,6 +574,50 @@ them is a registration detail. None of them is a workflow concept.
 
 ---
 
+## 9.9 Agent Loop
+
+Some work cannot be laid out as a fixed graph in advance: the model has to look at a result and
+decide whether to call another tool. That is a real need, and refusing it would push users back into
+writing their own loop outside the runtime.
+
+The loop is therefore a **step**, not a mode of the engine:
+
+```json
+{
+  "type": "agent",
+  "model": "reasoning",
+  "prompt": "research.investigate.v1",
+  "capabilities": ["search_docs", "read_page"],
+  "maxIterations": 8,
+  "output": "findings",
+  "next": "summarize"
+}
+```
+
+Inside that step the model may iterate — call a capability, read the result, call another. Outside
+it, nothing changes: the step produces a value and the workflow continues along the edge the
+definition declares.
+
+The bounds are what make it safe to have at all:
+
+```text
+the model chooses    →  which of the listed capabilities to call, and when to stop
+the workflow chooses →  that this step runs, what it may reach, when it must stop,
+                        and what happens next
+```
+
+* the capability list is declared in the step, not discovered by the model,
+* `maxIterations` is mandatory — an unbounded loop is not a workflow,
+* every iteration is a step-history entry, so the loop stays observable rather than opaque (§22),
+* the loop cannot alter the workflow graph, request an approval on its own or reach a capability the
+  step did not list.
+
+This is the narrow place where §37 bends: an agent step lets the model drive within a fence the
+workflow built. It never lets the model own the control flow — the moment the step returns, the
+declarative graph is back in charge.
+
+---
+
 # 10. Capability Architecture
 
 A capability is a named, invocable unit of work.
@@ -1471,6 +1515,78 @@ subprocess.Popen(["java", "-jar", "pipemesh.jar"])   # not the architecture
 It looks convenient and quietly makes every SDK responsible for process lifecycle, crash handling,
 logging, networking, versioning and containerization. An SDK's job is to talk to a runtime, not to
 operate one.
+
+
+---
+
+## 26.4 SDK Surface
+
+An SDK exposes three verbs. They differ in how the workflow is chosen and in how the result comes
+back — not in what the runtime does underneath.
+
+```text
+                         ┌─────────────────────┐
+                         │     PipeMesh SDK    │
+                         └──────────┬──────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │               │               │
+                    ▼               ▼               ▼
+               execute()       process()       stream()
+                    │               │               │
+              Explicit flow    Intent → flow    Long-running
+                    │               │               │
+                    └───────────────┼───────────────┘
+                                    ▼
+                         ┌─────────────────────┐
+                         │   PipeMesh Runtime  │
+                         │        Java         │
+                         ├─────────────────────┤
+                         │ Execution Engine    │
+                         │ Workflow Engine     │
+                         │ State               │
+                         │ Streaming           │
+                         │ Intent Resolution   │
+                         │ Agent Loop          │
+                         │ Human Approval      │
+                         └──────────┬──────────┘
+                                    │
+                    ┌───────────────┴───────────────┐
+                    ▼                               ▼
+                   LLM                          Capability
+                    │                               │
+        ┌───────┬───┴───┬───────┐      ┌──────┬─────┼──────┬──────────┐
+        ▼       ▼       ▼       ▼      ▼      ▼     ▼      ▼          ▼
+     OpenAI Anthropic Bedrock Local   MCP   REST  gRPC  Function   Worker
+                                       │
+                                       ▼
+                                     Tools
+```
+
+| Verb | The caller supplies | The runtime does | Comes back as |
+|---|---|---|---|
+| `execute()` | a workflow id and input | runs the named workflow | the final result |
+| `process()` | natural language | resolves intent, then runs the workflow it selected (§19) | the final result |
+| `stream()` | either of the above | the same execution, observed as it happens | a stream of events and tokens (§30) |
+
+`process()` is `execute()` with one step in front of it. Intent resolution picks a workflow; it does
+not run one. Keeping it a separate verb is what stops "the model chose the flow" from becoming "the
+model runs the flow" (§20, §37).
+
+`stream()` is not a third execution model. It is `WatchExecution` attached to the same run, which is
+why an execution started with `execute()` can be observed later without having been started
+differently.
+
+### Blocking belongs to the caller, never to the runtime
+
+`execute()` returning a final result implies waiting — but the waiting happens in the caller's
+thread, on the caller's side of the boundary. Inside the runtime nothing is held: an execution that
+reaches an approval is persisted and its resources released (§16). A workflow that suspends for three
+days does not keep an `execute()` call open for three days; it returns with the execution in
+`WAITING`, and the caller resumes or observes it later.
+
+A convenience that blocks a client thread is a client concern. A runtime that blocks its own threads
+is a broken runtime.
 
 
 ---
