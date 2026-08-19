@@ -10,8 +10,8 @@ Workflows are versioned JSON artifacts. The runtime compiles them into an execut
 them through pluggable providers, with durable state so an execution survives process restarts.
 
 **Current status: first slice, stage 4 of 6.** The whole chain runs from JSON — LLM, condition,
-capability, approval, resume — and survives a restart. The model and the capability are test
-doubles so far; a real provider and a real MCP client are next, then observability.
+capability, approval, resume — survives a restart, and calls a real model endpoint. A real MCP
+client is next, then observability.
 
 ```
 DESIGN.md                      # full technical architecture (47 sections)

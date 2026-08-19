@@ -590,10 +590,40 @@ core/execution/step/  LlmStepExecutor, CapabilityStepExecutor
 **Yapılmayan:** permission enforcement. `CapabilityDescriptor.permissions` okunuyor ama kontrol
 edilmiyor; kimin çalıştırdığı bilgisi (principal) henüz yok. Contract #8'e ait (§23).
 
-### Sıradaki — Aşama 4b
+### Aşama 4b — Model provider (2026-08-19) ✅
 
-Gerçek MCP client (`pipemesh-mcp`, `io.modelcontextprotocol.sdk:mcp`, stdio) ve tek somut
-`MessagingProvider`. **LLM provider kararı (#5) burada gerekiyor.**
+89 test yeşil (73 core + 6 Postgres + 10 provider).
+
+**Karar #5 kapatıldı — vendor değil, protokol seçildi.** `pipemesh-openai-compatible` modülü
+OpenAI chat-completions protokolünü konuşuyor; tek implementasyon şunların hepsine bağlanıyor:
+OpenAI, Ollama, vLLM, LiteLLM proxy, OpenRouter, Groq, Together. DESIGN.md §12 zaten
+`"protocol": "openai-compatible"` diye birinci sınıf kavram olarak listelemiş.
+
+- **Vendor SDK'sı kullanılmadı.** Bu runtime'ın modelden istediği şey bir istek ve iki token
+  sayısı. SDK auth/retry/streaming/tipli modeller ve kalabalık bir bağımlılık ağacı getirirdi —
+  ve PipeMesh'i gömen herkes onu devralırdı. JDK'nın `HttpClient`'ı + Jackson yeterli; modül
+  **sıfır yeni bağımlılık** ekliyor.
+- **API anahtarı opsiyonel.** Yerel Ollama/vLLM anahtar istemiyor; `apiKey` null ise
+  `Authorization` başlığı hiç gönderilmiyor. LiteLLM proxy'si önüne konursa anahtar yönetimi de
+  tek yerde toplanıyor.
+- **Structured output isteniyor, dayatılmıyor.** `response_format: json_schema` gönderiliyor;
+  cevap JSON değilse metin olarak dönüyor — cevabı kaybetmek, ham metni geri vermekten kötü.
+  Şema doğrulaması çağıranın işi (§21).
+- **Testler gerçek HTTP server'a karşı** (JDK'nın gömülü `HttpServer`'ı): ağ yok, anahtar yok,
+  container yok. Mock'lanmış bir client yalnızca kodun kendini yazıldığı gibi çağırdığını
+  doğrulardı; burada tel üzerinden giden istek ve dönen cevap sınanıyor.
+
+**Ayrıca kapatılan bir açık:** bir step executor exception fırlatırsa tüm koşum çöküyordu —
+execution'ın ulaştığı durum hiç yazılmıyor, sebebi hiçbir yere kaydedilmiyordu. `WorkflowExecutor`
+artık bunu `StepResult.Failed("step.threw", ...)`'e çeviriyor. Step'ler model, tool ve başkalarının
+servislerine uzanıyor; onlar exception fırlatır. Fırlayan bir step başarısız bir step'tir,
+başarısız bir motor değil.
+
+### Sıradaki — Aşama 4c
+
+Gerçek MCP client (`pipemesh-mcp`, `io.modelcontextprotocol.sdk:mcp`, stdio transport). Test için
+kendi yazacağımız sahte stdio MCP server'ı — ağ/npx bağımlılığı yok, gerçek JSON-RPC yolunu
+sınıyor.
 
 ### Aşama 4 planı
 

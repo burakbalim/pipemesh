@@ -14,6 +14,7 @@ import io.pipemesh.core.workflow.StepType;
 import java.time.Clock;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * The loop: run the current step, persist what it produced, move to the next one.
@@ -87,7 +88,7 @@ public final class WorkflowExecutor {
         }
 
         long startedAt = clock.millis();
-        StepResult result = resumable.resume(step, contextOf(record), signal);
+        StepResult result = safely(() -> resumable.resume(step, contextOf(record), signal));
         long finishedAt = clock.millis();
 
         return drive(graph, persist(record, step, result, startedAt, finishedAt));
@@ -114,10 +115,29 @@ public final class WorkflowExecutor {
         StepExecutor executor = executors.forType(step.type());
 
         long startedAt = clock.millis();
-        StepResult result = executor.execute(step, contextOf(record));
+        StepResult result = safely(() -> executor.execute(step, contextOf(record)));
         long finishedAt = clock.millis();
 
         return persist(record, step, result, startedAt, finishedAt);
+    }
+
+    /**
+     * A step that throws is a failed step, not a failed engine.
+     *
+     * <p>Steps reach out to models, tools and other people's services, and those
+     * throw. Letting one escape would lose the execution entirely: the state it
+     * reached would never be written, and nothing would record why. Turning it
+     * into {@link StepResult.Failed} keeps the run on the books.
+     */
+    private StepResult safely(Supplier<StepResult> step) {
+        try {
+            return step.get();
+        } catch (RuntimeException failure) {
+            return new StepResult.Failed(
+                    "step.threw",
+                    failure.getClass().getSimpleName() + ": " + failure.getMessage(),
+                    false);
+        }
     }
 
     private ExecutionRecord persist(

@@ -24,6 +24,7 @@
     <modules>
         <module>pipemesh-core</module>
         <module>pipemesh-postgres</module>
+        <module>pipemesh-openai-compatible</module>
     </modules>
 
     <properties>
