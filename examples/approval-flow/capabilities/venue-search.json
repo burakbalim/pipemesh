@@ -1,0 +1,23 @@
+{
+  "id": "venue_search",
+  "description": "Find suitable venues in a city",
+  "kind": "external",
+  "owner": "platform-team",
+  "version": "1.0",
+  "permissions": ["places.read"],
+
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "location": { "type": "string" }
+    },
+    "required": ["location"]
+  },
+
+  "execution": {
+    "type": "mcp",
+    "server": "places",
+    "tool": "search",
+    "argument": "location"
+  }
+}

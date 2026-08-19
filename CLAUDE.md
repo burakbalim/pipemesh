@@ -9,10 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Workflows are versioned JSON artifacts. The runtime compiles them into an execution graph and runs
 them through pluggable providers, with durable state so an execution survives process restarts.
 
-**Current status: first slice, stage 6 of 6.** The whole chain runs from JSON — LLM, condition,
-capability, approval, resume — survives a restart, calls a real model endpoint, reaches real MCP
-tools, and reports itself to pluggable observability backends. What remains is the example config
-repository and the proto.
+**Current status: the first slice is complete.** A workflow described in a configuration directory
+runs end to end — model, condition, capability over MCP, human approval — survives a restart, and
+reports itself to any OTLP backend. `.claude/contracts/README.md` lists what comes next.
 
 ```
 DESIGN.md                      # full technical architecture (47 sections)
@@ -38,9 +37,9 @@ implementation → fills "Implementation Notes" as work progresses
 Never start implementing a slice that has no contract. If a task doesn't fit an existing contract,
 write one first.
 
-The active slice is `.claude/contracts/walking-skeleton.md` — the first end-to-end vertical slice:
-`JSON Workflow → LLM → Condition → MCP → Approval → Resume → Observable execution`. Its Split
-Decision defines a 6-stage build order; follow it, and do not pull later stages forward.
+`.claude/contracts/walking-skeleton.md` is finished — read its Implementation Notes before changing
+the engine, since most of what looks arbitrary there was a decision with a reason. The contracts
+index says what is planned next; pick one and write its contract before implementing.
 
 ## Build & Test
 

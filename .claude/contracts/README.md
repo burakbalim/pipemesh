@@ -11,7 +11,7 @@ onunla çelişmez.
 
 | # | Contract | Kapsam (DESIGN.md) | Durum |
 |---|---|---|---|
-| 1 | [walking-skeleton.md](walking-skeleton.md) | §7, §8, §9.1–9.4, §10, §12–16, §22, §25–28 | Draft |
+| 1 | [walking-skeleton.md](walking-skeleton.md) | §7, §8, §9.1–9.4, §10, §12–16, §22, §25–28 | **Tamam** (2026-08-20) |
 | 2 | _reliability-policies_ | §17 Retry, §18 Failure handling, timeout, fallback model | Planlanan |
 | 3 | _structured-output-and-prompts_ | §11 Prompt registry, §21 Structured output, §24 versiyonlama | Planlanan |
 | 4 | _streaming_ | §30 Streaming, provider sınırında token akışı | Planlanan |
@@ -27,6 +27,7 @@ onunla çelişmez.
 | 14 | _application-capabilities_ | `kind: application` capability'leri, SDK worker'ları, business code sınırı | Planlanan |
 | 15 | _langchain-adapter_ | §35 opsiyonel LangChain provider'ı (`pipemesh-langchain`) | Planlanan |
 | 16 | _agent-loop_ | §9.9 sınırlı agent step'i — capability listesi, maxIterations, iterasyon izlenebilirliği | Planlanan |
+| 16b | _json-schemas_ | `workflow.schema.json` / `capability.schema.json` — §23.1'in şema seviyesindeki karşılığı | Planlanan |
 | 17 | _multi-tenancy_ | §22.2 organizasyon izolasyonu, kota/metering — etiketleme değil *zorlama* | Planlanan |
 | 18 | _otel-exporter_ | §22.1 `pipemesh-opentelemetry` — OTLP üzerinden Datadog/New Relic/Grafana | **Tamam** (2026-08-20) |
 

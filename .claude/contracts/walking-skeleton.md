@@ -716,10 +716,59 @@ kod değil **config** meselesi (OTLP endpoint'i).
 Testler gerçek OTel SDK'sı + in-memory exporter'larla koşuyor: doğrulanan şey bir backend'in
 gerçekten alacağı span ve metrikler.
 
-### Sıradaki — Aşama 6
+### Aşama 6 — Config repo ve proto (2026-08-20) ✅
 
-`examples/approval-flow/` config repo'su, ikinci örnek workflow ve `proto/pipemesh.proto`
-(implementasyon yok). Dilim orada kapanıyor.
+**132 test yeşil** (96 core + 8 Postgres + 10 provider + 9 MCP + 9 OTel). **Dilim tamamlandı.**
+
+```
+core/config/            ConfigRepository, ModelDefinition, ModelProviderFactory, ConfigException
+openai-compatible/      OpenAiCompatibleProviderFactory
+examples/approval-flow/ workflows/ models/ capabilities/ prompts/ schemas/ + README
+proto/pipemesh.proto    API contract'ı (implementasyon yok)
+```
+
+- **`examples/` ancak onu yükleyen bir şey varsa bir şey kanıtlar.** Bu yüzden asıl iş
+  `ConfigRepository`: §31 yapısını okuyup registry'leri kuruyor. Test dosyaları saymıyor,
+  **her iki workflow'u da derliyor** — dilimin "ikinci workflow sadece config eklenerek çalışır"
+  kriteri artık dosya sisteminden doğrulanıyor.
+- **`ModelProviderFactory` SPI'ı.** Yükleyici `models.json`'ı okumayı bilir ama bir
+  `openai-compatible` endpoint'inin neye ihtiyacı olduğunu bilmez. Yeni bir protokol yeni bir
+  factory olarak geliyor, core hiçbir şey öğrenmeden.
+- **Secret dosyada değil, adı dosyada.** `apiKeyEnv: "OPENAI_API_KEY"` — config dosyaları
+  commit'lenir, anahtarlar commit'lenmemeli.
+- **İkinci workflow (`refund_request`) tek satır kod olmadan eklendi.** Farklı adım sırası,
+  farklı prompt, aynı runtime.
+- **`proto/pipemesh.proto` yazıldı** (§26.1, §26.4): `StartExecution`, `ProcessMessage`,
+  `SubmitApproval`, `GetExecution`, `WatchExecution` (server stream) ve worker'ın açtığı
+  `CapabilityWorker.Connect` bidi stream'i. Organizasyon ve traceparent alanları var;
+  `StartExecutionRequest`'te idempotency key/deadline/principal/priority için `reserved` aralık
+  bırakıldı. Implementasyon #12'nin işi.
+
+## Dilim tamamlandı — kabul kriterleri
+
+| Kriter | Durum |
+|---|---|
+| JSON workflow runtime değişmeden yükleniyor ve çalışıyor | ✅ `ConfigRepositoryTest` |
+| LLM step structured output istiyor, şema ihlali `Failed` dönüyor | ✅ `OpenAiCompatibleProviderTest` |
+| Condition LLM çağırmadan deterministik değerlendiriyor | ✅ `ConditionExpressionTest` |
+| Capability step MCP tool'unu çağırıyor, workflow'da "mcp" geçmiyor | ✅ `WorkflowOverMcpTest` |
+| Approval'da `WAITING` persist ediliyor, thread bloklanmıyor | ✅ `ApprovalResumeTest` |
+| **Restart testi** — process ölüyor, resume kaldığı yerden `COMPLETED` | ✅ `DurableApprovalRestartTest` |
+| `onRejected` yolu `CANCELLED`, side-effect yok | ✅ `ApprovalResumeTest` |
+| Aynı approval iki kez → ikincisi yok sayılıyor | ✅ `ApprovalResumeTest` |
+| Trace tüm step'leri, model, prompt versiyonu ve token'ları içeriyor | ✅ `FullSliceTest` |
+| Restart sonrası aynı trace | ✅ `DurableApprovalRestartTest`, `OpenTelemetryExecutionObserverTest` |
+| Yeni step tipi `WorkflowExecutor`'a dokunmadan ekleniyor | ✅ `ThrowingStepTest` (özel executor) |
+| Compiler geçersiz grafiği reddediyor | ✅ `WorkflowCompilerTest` |
+| İkinci workflow sadece config ile çalışıyor | ✅ `ConfigRepositoryTest` |
+| Proto yazıldı, girdi/çıktılar kayıpsız map edilebiliyor | ✅ `proto/pipemesh.proto` |
+| Şema gövdesinde kod taşıyan step'i reddediyor | ⚠️ **Yapılmadı** — `workflow.schema.json` henüz yazılmadı |
+| Workflow step'i transport/owner/version taşımıyor | ✅ Tasarımla; `ConfigRepositoryTest` doğruluyor |
+
+**Kalan tek eksik:** JSON Schema dosyaları (`schemas/workflow.schema.json` vb.) yazılmadı.
+`WorkflowDefinitionReader` + `WorkflowCompiler` doğrulamayı kodda yapıyor ve inline kod taşıyan bir
+step zaten hiçbir executor tarafından sahiplenilmediği için compile'da düşüyor — ama şema
+seviyesinde `additionalProperties: false` garantisi yok. Ayrı bir iş olarak kayda geçirildi.
 
 ### Aşama 4 planı
 

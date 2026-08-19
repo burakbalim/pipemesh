@@ -1,0 +1,13 @@
+{
+  "id": "refund_payment",
+  "description": "Refund a payment through the billing service",
+  "kind": "application",
+  "owner": "billing-team",
+  "version": "2.1",
+  "permissions": ["billing.refund"],
+
+  "execution": {
+    "type": "grpc",
+    "target": "billing-service"
+  }
+}

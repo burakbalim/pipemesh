@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "valid":    { "type": "boolean" },
+    "location": { "type": "string" },
+    "people":   { "type": "integer" }
+  },
+  "required": ["valid"]
+}

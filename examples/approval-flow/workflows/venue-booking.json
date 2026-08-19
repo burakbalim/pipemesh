@@ -1,0 +1,41 @@
+{
+  "id": "venue_booking",
+  "version": "1.0",
+  "entry": "extract",
+
+  "steps": [
+    {
+      "id": "extract",
+      "type": "llm",
+      "model": "fast",
+      "prompt": "venue_booking.extraction.v1",
+      "output": "request",
+      "next": "validate"
+    },
+    {
+      "id": "validate",
+      "type": "condition",
+      "expression": "$.request.valid == true",
+      "onTrue": "search_venue",
+      "onFalse": "rejected"
+    },
+    {
+      "id": "search_venue",
+      "type": "capability",
+      "capability": "venue_search",
+      "input": "$.request.location",
+      "output": "venues",
+      "next": "approval"
+    },
+    {
+      "id": "approval",
+      "type": "human_approval",
+      "message": "Book this venue?",
+      "onApproved": "booked",
+      "onRejected": "cancelled"
+    },
+    { "id": "booked",    "type": "terminal", "status": "COMPLETED" },
+    { "id": "cancelled", "type": "terminal", "status": "CANCELLED" },
+    { "id": "rejected",  "type": "terminal", "status": "CANCELLED" }
+  ]
+}

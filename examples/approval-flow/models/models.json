@@ -1,0 +1,18 @@
+{
+  "models": {
+    "fast": {
+      "protocol": "openai-compatible",
+      "baseUrl": "http://localhost:11434/v1",
+      "model": "llama3.2",
+      "timeoutSeconds": 60
+    },
+
+    "reasoning": {
+      "protocol": "openai-compatible",
+      "baseUrl": "https://api.openai.com/v1",
+      "model": "gpt-4o-mini",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "timeoutSeconds": 120
+    }
+  }
+}

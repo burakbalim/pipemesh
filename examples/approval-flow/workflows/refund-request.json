@@ -1,0 +1,32 @@
+{
+  "id": "refund_request",
+  "version": "1.0",
+  "entry": "classify",
+
+  "steps": [
+    {
+      "id": "classify",
+      "type": "llm",
+      "model": "fast",
+      "prompt": "venue_booking.refund.v1",
+      "output": "claim",
+      "next": "needs_approval"
+    },
+    {
+      "id": "needs_approval",
+      "type": "condition",
+      "expression": "$.claim.amount > 100",
+      "onTrue": "approval",
+      "onFalse": "refunded"
+    },
+    {
+      "id": "approval",
+      "type": "human_approval",
+      "message": "Approve this refund?",
+      "onApproved": "refunded",
+      "onRejected": "declined"
+    },
+    { "id": "refunded", "type": "terminal", "status": "COMPLETED" },
+    { "id": "declined", "type": "terminal", "status": "CANCELLED" }
+  ]
+}
