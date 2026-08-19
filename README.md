@@ -130,6 +130,39 @@ implementations live in the application or worker that registered them (§23.1).
 See [DESIGN.md §26](DESIGN.md) for the boundary, the deployment modes and how the runtime invokes
 work that lives inside an SDK.
 
+## Observability
+
+Execution telemetry leaves the runtime through one narrow observer, so several backends can run at
+once and none of them can fail a workflow:
+
+```java
+ExecutionObserver observer = CompositeExecutionObserver.of(
+        new OpenTelemetryExecutionObserver(openTelemetry),
+        new LoggingExecutionObserver());
+
+new WorkflowExecutor(stateStore, executors, observer);
+```
+
+Datadog, New Relic, Grafana and Honeycomb all ingest OTLP, so reaching them is configuration rather
+than code — point the exporter at the collector they give you:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.eu01.nr-data.net:4317   # or Datadog, Grafana, ...
+OTEL_EXPORTER_OTLP_HEADERS=api-key=...
+```
+
+Every span and metric is labelled with the organization the execution belongs to. And an execution
+that waits three days for an approval and finishes in another process still reads as **one trace**:
+the trace context is persisted with the state and picked up again on resume.
+
+| Signal | What it answers |
+|---|---|
+| `pipemesh.workflow.executions` | how many finished, and in which status |
+| `pipemesh.workflow.duration` | how long they took, waits included |
+| `pipemesh.step.duration` | which step is slow |
+| `pipemesh.approval.wait_time` | how long people take to decide |
+| `pipemesh.llm.input_tokens` / `output_tokens` | what the models cost |
+
 ## Planned project structure
 
 ```text
@@ -138,6 +171,7 @@ providers/      # messaging, models, tools                            (Java)
 integrations/   # mcp, http, messaging                                (Java)
 registry/       # workflow, capability, prompt, model                      (Java)
 observability/  # tracing, metrics, logging                           (Java)
+opentelemetry/  # spans and metrics for any OTLP backend              (Java)
 spring/         # optional Spring Boot starter                        (Java)
 proto/          # pipemesh.proto — the API contract                   (language-neutral)
 sdk/python/     # client SDK + capability worker                           (Python)

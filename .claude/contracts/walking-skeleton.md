@@ -689,6 +689,33 @@ aracı** (New Relic, Datadog vb.).
 **Etiketleme izolasyon değil.** Bir organizasyonun diğerinin execution'larını okuyamaması ve
 tüketimin ölçülmesi ayrı bir iş — contract #17.
 
+### Aşama 5b — OTel exporter (2026-08-20) ✅
+
+**123 test yeşil** (87 core + 8 Postgres + 10 provider + 9 MCP + 9 OTel). Contract #18 kapandı.
+
+`pipemesh-opentelemetry` bizim olaylarımızı gerçek OTel span ve metriklerine çeviriyor. Artık
+"observability tool'larını destekliyoruz" cümlesi doğru: Datadog, New Relic, Grafana, Honeycomb
+kod değil **config** meselesi (OTLP endpoint'i).
+
+- **Sadece `opentelemetry-api` bağımlılığı.** Hangi exporter'ın koşacağı, nereye işaret edeceği ve
+  nasıl örnekleneceği uygulamanın kararı; SDK'yı çeken bir kütüphane bu kararı ona bağımlı olan
+  herkes adına vermiş olur. SDK yalnızca test kapsamında.
+- **Execution bir trace'tir, span değil.** Üç gün bekleyen bir workflow onu başlatan process'ten
+  uzun yaşıyor; açık tutulacak bir span yok. Her step, execution'ın saklanan trace context'ine
+  parent'lanmış bir span oluyor. Bir test bunu doğruluyor: bekleyip resume olan bir workflow'un
+  tüm span'leri tek trace'te.
+- **Span'ler açık zaman damgasıyla kaydediliyor.** Olay bittikten sonra bildiriliyor ama span
+  gerçekten koştuğu aralığı gösteriyor.
+- **`approval.wait_time` saklanan kayıttan ölçülüyor** (`atEpochMillis - lastWrittenAtEpochMillis`),
+  bir timer'dan değil — üç gün süren bir bekleyiş, o sürenin çoğunda hiçbir process izlemiyorken
+  bile doğru raporlanıyor. Bunun için `ExecutionEvent`'e `startedAt`/`lastWrittenAt` eklendi.
+- **§22 metriklerinin hepsi üretiliyor:** `workflow.executions`, `workflow.duration`,
+  `step.duration`, `approval.wait_time`, `llm.input_tokens`, `llm.output_tokens`. Hepsi
+  organizasyon etiketli.
+
+Testler gerçek OTel SDK'sı + in-memory exporter'larla koşuyor: doğrulanan şey bir backend'in
+gerçekten alacağı span ve metrikler.
+
 ### Sıradaki — Aşama 6
 
 `examples/approval-flow/` config repo'su, ikinci örnek workflow ve `proto/pipemesh.proto`

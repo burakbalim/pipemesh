@@ -69,6 +69,7 @@ one to `core/` should feel like a decision, not a convenience.
 | Build | Maven, multi-module |
 | State store | PostgreSQL in `pipemesh-postgres` (JSONB variables, optimistic locking); in-memory impl for tests |
 | MCP | `io.modelcontextprotocol.sdk:mcp-core` in `pipemesh-mcp`, stdio transport |
+| Observability | `opentelemetry-api` in `pipemesh-opentelemetry` — api only; the application picks the exporter |
 | Expressions | narrow in-house evaluator — JSONPath reads + fixed comparison grammar |
 | Client boundary | gRPC (`proto/pipemesh.proto`) — designed now, implemented in a later contract |
 | SDKs | Python, TypeScript, Java — generated from the proto (later contract) |

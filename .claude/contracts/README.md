@@ -28,7 +28,7 @@ onunla çelişmez.
 | 15 | _langchain-adapter_ | §35 opsiyonel LangChain provider'ı (`pipemesh-langchain`) | Planlanan |
 | 16 | _agent-loop_ | §9.9 sınırlı agent step'i — capability listesi, maxIterations, iterasyon izlenebilirliği | Planlanan |
 | 17 | _multi-tenancy_ | §22.2 organizasyon izolasyonu, kota/metering — etiketleme değil *zorlama* | Planlanan |
-| 18 | _otel-exporter_ | §22.1 `pipemesh-opentelemetry` — OTLP üzerinden Datadog/New Relic/Grafana | Planlanan |
+| 18 | _otel-exporter_ | §22.1 `pipemesh-opentelemetry` — OTLP üzerinden Datadog/New Relic/Grafana | **Tamam** (2026-08-20) |
 
 Faz eşlemesi için DESIGN.md §45'e bakın: #1 Phase 1'i, #2–4 Phase 2'yi, #6–7 Phase 3'ü,
 #9–11 Phase 4'ü karşılar. #12 fazlardan bağımsız — #1 tamamlanır tamamlanmaz başlayabilir.

@@ -151,7 +151,9 @@ public final class WorkflowExecutor {
                 record.status(),
                 record.currentStep(),
                 TraceContext.parse(record.traceContext()).orElse(null),
-                clock.millis());
+                clock.millis(),
+                record.createdAtEpochMillis(),
+                record.updatedAtEpochMillis());
     }
 
     private boolean isSettled(ExecutionRecord record) {
