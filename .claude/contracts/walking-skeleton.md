@@ -619,11 +619,41 @@ artık bunu `StepResult.Failed("step.threw", ...)`'e çeviriyor. Step'ler model,
 servislerine uzanıyor; onlar exception fırlatır. Fırlayan bir step başarısız bir step'tir,
 başarısız bir motor değil.
 
-### Sıradaki — Aşama 4c
+### Aşama 4c — MCP client (2026-08-19) ✅
 
-Gerçek MCP client (`pipemesh-mcp`, `io.modelcontextprotocol.sdk:mcp`, stdio transport). Test için
-kendi yazacağımız sahte stdio MCP server'ı — ağ/npx bağımlılığı yok, gerçek JSON-RPC yolunu
-sınıyor.
+**98 test yeşil** (73 core + 6 Postgres + 10 provider + 9 MCP). Aşama 4 tamamlandı.
+
+```
+pipemesh-mcp/  McpServerConnection, McpCapabilityProvider
+               (test) TestMcpServer, McpCapabilityProviderTest, WorkflowOverMcpTest
+```
+
+- **SDK:** `io.modelcontextprotocol.sdk:mcp-core` 0.16.0 + `mcp-json-jackson2`, stdio transport.
+  Buradaki bağımlılık ağacı (reactor-core dahil) kabul edilebilir çünkü **modülde izole**:
+  MCP istemeyen embedder almıyor. Aynı gerekçeyle model provider'ında SDK'yı reddetmiştik —
+  orada yüzey çok darken burada protokolün kendisi karmaşık ve SDK gerçek iş yapıyor.
+- **Bağlantılar uzun ömürlü ve paylaşımlı.** stdio üzerinden bir MCP server bir child process;
+  capability çağrısı başına bir tane başlatmak her tool çağrısına process açılış maliyeti
+  yüklerdi.
+- **Skaler girdi sarmalanıyor.** MCP tool'ları isimli argüman alır, workflow ise `$.request.location`
+  ile düz bir string verebilir; `execution.argument` adı altında sarmalanıyor (varsayılan `input`).
+- **Tool çıktısı JSON ise yapılandırılmış, değilse metin.** Tool'un hangisini seçtiği workflow'u
+  ilgilendirmemeli.
+- **Transport hatası retryable, tool hatası değil.** Bir tool çağrısı process sınırı geçiyor;
+  ağ/proses hatasını yeniden denenebilir saymak dürüst varsayılan, tool'un "hayır" demesi ise
+  yeniden denemeyle düzelmez.
+
+**Test yaklaşımı — kendi yazdığımız stdio server.** `TestMcpServer` ayrı bir JVM process'i olarak
+başlatılıyor (testin kendi classpath'i ile), gerçek JSON-RPC handshake ve tool çağrısı gerçek
+pipe'lar üzerinden oluyor. npm registry, ağ ya da kurulu Node gerekmiyor; CI'da deterministik.
+
+**Kabul kriteri karşılandı:** `WorkflowOverMcpTest` bir workflow'u gerçek MCP tool'una kadar
+koşturuyor ve workflow JSON'ında "mcp" kelimesinin geçmediğini doğruluyor.
+
+### Sıradaki — Aşama 5
+
+Observability: trace/span, §22'deki metrikler ve **restart sonrası trace devamlılığı**
+(`ExecutionRecord.traceContext` Aşama 3'ten beri persist ediliyor, artık kullanılacak).
 
 ### Aşama 4 planı
 

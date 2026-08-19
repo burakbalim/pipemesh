@@ -9,9 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Workflows are versioned JSON artifacts. The runtime compiles them into an execution graph and runs
 them through pluggable providers, with durable state so an execution survives process restarts.
 
-**Current status: first slice, stage 4 of 6.** The whole chain runs from JSON — LLM, condition,
-capability, approval, resume — survives a restart, and calls a real model endpoint. A real MCP
-client is next, then observability.
+**Current status: first slice, stage 5 of 6.** The whole chain runs from JSON — LLM, condition,
+capability, approval, resume — survives a restart, calls a real model endpoint and reaches real MCP
+tools. Observability is what remains.
 
 ```
 DESIGN.md                      # full technical architecture (47 sections)
@@ -50,7 +50,8 @@ mvn -o test -Dtest=ExecutionContextTest
 ```
 
 `pipemesh-postgres` tests run PostgreSQL in Testcontainers, so Docker must be running. They are the
-only tests that prove durability — an in-memory store cannot.
+only tests that prove durability — an in-memory store cannot. `pipemesh-mcp` tests launch a real MCP
+server as a child JVM; they need no network.
 
 If a build hangs rather than failing, check `~/.m2/settings.xml`: an `artifactory` profile there
 can point `central` at a corporate mirror that is unreachable outside its VPN. `-o` works from the
@@ -66,7 +67,7 @@ one to `core/` should feel like a decision, not a convenience.
 | Core runtime | Java 21, **framework-free** — no Spring, no web framework in `core/` |
 | Build | Maven, multi-module |
 | State store | PostgreSQL in `pipemesh-postgres` (JSONB variables, optimistic locking); in-memory impl for tests |
-| MCP | `io.modelcontextprotocol.sdk:mcp`, stdio transport |
+| MCP | `io.modelcontextprotocol.sdk:mcp-core` in `pipemesh-mcp`, stdio transport |
 | Expressions | narrow in-house evaluator — JSONPath reads + fixed comparison grammar |
 | Client boundary | gRPC (`proto/pipemesh.proto`) — designed now, implemented in a later contract |
 | SDKs | Python, TypeScript, Java — generated from the proto (later contract) |
