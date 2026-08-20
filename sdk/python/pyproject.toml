@@ -1,0 +1,18 @@
+[project]
+name = "pipemesh"
+version = "0.1.0"
+description = "Python client for the PipeMesh workflow runtime"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+dependencies = ["grpcio>=1.60", "protobuf>=4.25"]
+
+[project.optional-dependencies]
+dev = ["grpcio-tools>=1.60", "pytest>=7"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["pipemesh"]

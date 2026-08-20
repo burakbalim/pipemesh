@@ -12,6 +12,7 @@ import io.pipemesh.core.execution.WorkflowRuntime;
 import io.pipemesh.core.workflow.WorkflowId;
 import io.pipemesh.proto.v1.ExecutionHandle;
 import io.pipemesh.proto.v1.ExecutionSnapshot;
+import io.pipemesh.proto.v1.ExecutionStarted;
 import io.pipemesh.proto.v1.ExecutionUpdate;
 import io.pipemesh.proto.v1.GetExecutionRequest;
 import io.pipemesh.proto.v1.PipeMeshGrpc;
@@ -98,18 +99,28 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
         ExecutionId executionId = ExecutionId.of(request.getExecutionId());
         ServerCallStreamObserver<ExecutionUpdate> call = (ServerCallStreamObserver<ExecutionUpdate>) response;
         AtomicReference<AutoCloseable> subscription = new AtomicReference<>();
+        AtomicReference<AutoCloseable> unsubscribe = new AtomicReference<>(() -> {
+        });
 
-        subscription.set(broker.watch(executionId, update -> {
-            if (call.isCancelled()) {
-                return;
-            }
-            call.onNext(update);
-            if (update.getUpdateCase() == ExecutionUpdate.UpdateCase.FINISHED) {
-                close(subscription.get());
-                call.onCompleted();
-            }
-        }));
+        // Sequence 0 is where things stood when this watcher arrived. Without it a
+        // client has no moment it can point at and say "from here I am listening",
+        // and anything that happens between asking to watch and being subscribed
+        // is lost with no way to notice.
+        runtime.snapshot(executionId).ifPresent(snapshot -> call.onNext(ExecutionUpdate.newBuilder()
+                .setSequence(0)
+                .setAt(WireTypes.toWire(System.currentTimeMillis()))
+                .setStarted(ExecutionStarted.newBuilder()
+                        .setExecution(WireTypes.toWire(snapshot))
+                        .build())
+                .build()));
 
+        UpdatePump pump = new UpdatePump(call);
+        subscription.set(() -> {
+            pump.close();
+            unsubscribe.get().close();
+        });
+
+        unsubscribe.set(broker.watch(executionId, pump::offer));
         call.setOnCancelHandler(() -> close(subscription.get()));
     }
 

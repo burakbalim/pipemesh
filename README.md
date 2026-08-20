@@ -83,7 +83,7 @@ The runtime is implemented in **Java 21**; the workflows it runs are not tied to
 | Core runtime | Java 21, framework-free (no Spring dependency in `core/`) |
 | Build | Maven, multi-module |
 | Client boundary | gRPC in `pipemesh-grpc`, generated from `proto/pipemesh.proto` |
-| SDKs | Python, TypeScript, Java — generated from the same proto |
+| SDKs | Python (`sdk/python`) today; TypeScript and Java from the same proto next |
 | Spring integration | `pipemesh-spring-boot-starter` (optional, separate module) |
 | Workflow definitions | JSON — authored and versioned independently of all of the above |
 

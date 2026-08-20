@@ -2,11 +2,10 @@ package io.pipemesh.grpc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.grpc.Context;
 import io.grpc.ManagedChannel;
-import io.grpc.Server;
+import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
-import io.grpc.inprocess.InProcessChannelBuilder;
-import io.grpc.inprocess.InProcessServerBuilder;
 import io.pipemesh.core.execution.DefaultWorkflowRuntime;
 import io.pipemesh.core.execution.StepExecutors;
 import io.pipemesh.core.execution.WorkflowExecutor;
@@ -62,7 +61,7 @@ class PipeMeshServiceTest {
             }
             """;
 
-    private Server server;
+    private PipeMeshServer server;
     private ManagedChannel channel;
     private PipeMeshGrpc.PipeMeshBlockingStub client;
     private final ExecutionUpdateBroker broker = new ExecutionUpdateBroker();
@@ -82,20 +81,22 @@ class PipeMeshServiceTest {
         WorkflowRuntime runtime = new DefaultWorkflowRuntime(
                 workflows, stateStore, new WorkflowExecutor(stateStore, executors, broker));
 
-        String name = InProcessServerBuilder.generateName();
-        server = InProcessServerBuilder.forName(name)
-                .addService(new PipeMeshService(runtime, broker))
-                .build()
-                .start();
+        // A real socket rather than the in-process transport: the streaming calls
+        // here are exactly what a client in another language makes, and the
+        // in-process transport does not behave like a network when one blocking
+        // stub both watches a stream and makes calls on the side.
+        server = new PipeMeshServer(runtime, broker, 0).start();
 
-        channel = InProcessChannelBuilder.forName(name).build();
+        channel = ManagedChannelBuilder.forAddress("localhost", server.port())
+                .usePlaintext()
+                .build();
         client = PipeMeshGrpc.newBlockingStub(channel);
     }
 
     @AfterEach
     void stopServer() throws InterruptedException {
         channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
-        server.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
+        server.close();
     }
 
     private com.google.protobuf.Struct input(String json) {
@@ -104,6 +105,14 @@ class PipeMeshServiceTest {
         } catch (Exception malformed) {
             throw new IllegalArgumentException(malformed);
         }
+    }
+
+    private void approve(String executionId) {
+        client.submitApproval(SubmitApprovalRequest.newBuilder()
+                .setExecutionId(executionId)
+                .setApprovalId(executionId + ":approval")
+                .setApproved(true)
+                .build());
     }
 
     private io.pipemesh.proto.v1.ExecutionHandle startExpensive() {
@@ -186,19 +195,51 @@ class PipeMeshServiceTest {
                 client.watchExecution(WatchExecutionRequest.newBuilder()
                         .setExecutionId(waiting.getExecutionId()).build());
 
-        client.submitApproval(SubmitApprovalRequest.newBuilder()
-                .setExecutionId(waiting.getExecutionId())
-                .setApprovalId(waiting.getExecutionId() + ":approval")
-                .setApproved(true)
-                .build());
-
+        // Read the arrival snapshot before doing anything: a blocking stub only
+        // pumps its callbacks while the caller is inside next(), so a stream left
+        // untouched is a stream nobody is draining.
         List<String> kinds = new ArrayList<>();
+        kinds.add(updates.next().getUpdateCase().name());
+
+        approve(waiting.getExecutionId());
+
         while (updates.hasNext()) {
             kinds.add(updates.next().getUpdateCase().name());
         }
 
-        assertEquals(List.of("RESUMED", "STEP_FINISHED", "STEP_FINISHED", "FINISHED"), kinds,
-                "the stream ends itself when the execution does");
+        assertEquals(
+                List.of("STARTED", "RESUMED", "STEP_FINISHED", "STEP_FINISHED", "FINISHED"), kinds,
+                "the stream opens with where things stand and ends when the execution does");
+    }
+
+    @Test
+    void opensTheStreamWithWhereTheExecutionAlreadyIs() {
+        var waiting = startExpensive();
+
+        var first = firstUpdateFor(waiting.getExecutionId());
+
+        assertEquals(0, first.getSequence(), "sequence zero is the state on arrival");
+        assertEquals(ExecutionStatus.EXECUTION_STATUS_WAITING,
+                first.getStarted().getExecution().getStatus());
+    }
+
+    /**
+     * Reads one update and hangs up.
+     *
+     * <p>Through a cancellable context, because a blocking server stream that is
+     * simply abandoned leaves a thread parked on it — the reader never learns the
+     * call is over, and a JVM with one of those in it will not exit.
+     */
+    private io.pipemesh.proto.v1.ExecutionUpdate firstUpdateFor(String executionId) {
+        Context.CancellableContext watching = Context.current().withCancellation();
+        try {
+            return watching.call(() -> client.watchExecution(WatchExecutionRequest.newBuilder()
+                    .setExecutionId(executionId).build()).next());
+        } catch (Exception failure) {
+            throw new IllegalStateException(failure);
+        } finally {
+            watching.cancel(null);
+        }
     }
 
     @Test
@@ -209,13 +250,16 @@ class PipeMeshServiceTest {
                 client.watchExecution(WatchExecutionRequest.newBuilder()
                         .setExecutionId(waiting.getExecutionId()).build());
 
-        client.submitApproval(SubmitApprovalRequest.newBuilder()
-                .setExecutionId(waiting.getExecutionId())
-                .setApprovalId(waiting.getExecutionId() + ":approval")
-                .setApproved(true)
-                .build());
+        List<Long> sequences = new ArrayList<>();
+        sequences.add(updates.next().getSequence());
 
-        assertEquals(1, updates.next().getSequence());
-        assertEquals(2, updates.next().getSequence());
+        approve(waiting.getExecutionId());
+
+        while (updates.hasNext()) {
+            sequences.add(updates.next().getSequence());
+        }
+
+        assertEquals(0L, sequences.get(0), "the snapshot on arrival");
+        assertEquals(List.of(0L, 1L, 2L, 3L, 4L), sequences);
     }
 }

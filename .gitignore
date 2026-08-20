@@ -38,11 +38,13 @@ npm-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-### Python (examples, scripts) ###
+### Python (SDK, examples, scripts) ###
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+*.egg-info/
+.pytest_cache/
 
 ### Secrets & local config ###
 .env

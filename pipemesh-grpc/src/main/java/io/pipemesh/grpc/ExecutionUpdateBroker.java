@@ -7,7 +7,6 @@ import io.pipemesh.core.observability.StepEvent;
 import io.pipemesh.core.observability.TokenEvent;
 import io.pipemesh.proto.v1.ExecutionFinished;
 import io.pipemesh.proto.v1.ExecutionResumed;
-import io.pipemesh.proto.v1.ExecutionStarted;
 import io.pipemesh.proto.v1.ExecutionSuspended;
 import io.pipemesh.proto.v1.ExecutionUpdate;
 import io.pipemesh.proto.v1.StepFinished;
@@ -27,9 +26,12 @@ import java.util.function.Consumer;
  * channel: the gRPC boundary is a single subscriber to that channel, not a second
  * fan-out mechanism bolted alongside it (§26.4).
  *
- * <p>Live only. A watcher sees what happens from the moment it subscribes; the
- * proto's {@code from_sequence} is not honoured yet, because replaying means
- * storing updates and deciding how long to keep them — a decision worth making
+ * <p>Live only, and numbered from 1. Sequence 0 belongs to the service: it is the
+ * snapshot a watcher receives on arrival, so that "from here I am listening" is a
+ * moment the client can point at.
+ *
+ * <p>The proto's {@code from_sequence} is not honoured. Replaying means storing
+ * updates and deciding how long to keep them — a decision worth making
  * deliberately rather than as a side effect of adding a stream.
  */
 public final class ExecutionUpdateBroker implements ExecutionObserver {
@@ -50,11 +52,6 @@ public final class ExecutionUpdateBroker implements ExecutionObserver {
                 }
             }
         };
-    }
-
-    @Override
-    public void executionStarted(ExecutionEvent event) {
-        publish(event, update -> update.setStarted(ExecutionStarted.getDefaultInstance()));
     }
 
     @Override
