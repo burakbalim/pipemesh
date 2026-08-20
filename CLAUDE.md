@@ -119,7 +119,9 @@ passes the tests — say so rather than accepting it.
   put an operational concern where nobody can change it without editing the workflow.
 - **A crash is not a failure report.** An execution left in `RUNNING` is picked up by
   `RecoverySweeper`; a step that may already have taken effect is not repeated, and the execution
-  stops for a person instead of guessing.
+  stops for a person instead of guessing. Something must actually run the sweeper —
+  `RecoveryScheduler`, or the server it is handed to. Durability that depends on an embedder
+  remembering is not durability.
 - **Never retry what may already have happened.** A capability declares `idempotent: false` and the
   runtime refuses to repeat it, because a transport failure leaves it unknown whether the call
   landed.

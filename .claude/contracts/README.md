@@ -26,7 +26,7 @@ onunla çelişmez.
 | 12 | [grpc-boundary.md](grpc-boundary.md) | §26.1 gRPC servisi (`CapabilityWorker` hariç → #14) | **Tamam** (2026-08-20) |
 | 13a | [python-sdk.md](python-sdk.md) | Python client — proto'dan üretilen stub'lar + ince sarmalayıcı | **Tamam** (2026-08-20) |
 | 13b | [typescript-sdk.md](typescript-sdk.md) | TypeScript client — aynı proto, `@grpc/proto-loader` | **Tamam** (2026-08-20) |
-| 14 | _application-capabilities_ | `kind: application` capability'leri, SDK worker'ları, business code sınırı | Planlanan |
+| 14 | [application-capabilities.md](application-capabilities.md) | SDK worker'ları (`CapabilityWorker.Connect`), business code sınırı | Draft |
 | 15 | _langchain-adapter_ | §35 opsiyonel LangChain provider'ı (`pipemesh-langchain`) | Planlanan |
 | 16 | _agent-loop_ | §9.9 sınırlı agent step'i — capability listesi, maxIterations, iterasyon izlenebilirliği | Planlanan |
 | 16b | _json-schemas_ | `workflow.schema.json` / `capability.schema.json` — §23.1'in şema seviyesindeki karşılığı | Planlanan |
