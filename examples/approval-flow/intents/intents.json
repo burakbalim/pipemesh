@@ -1,0 +1,20 @@
+{
+  "intents": [
+    {
+      "id": "book_venue",
+      "workflow": "venue_booking",
+      "description": "The user wants to book a venue, find a place, or organise an event",
+      "matches": ["book a venue", "find a venue", "organise a meetup", "mekan ayır"]
+    },
+    {
+      "id": "request_refund",
+      "workflow": "refund_request",
+      "description": "The user is asking for money back on something they paid for",
+      "matches": ["refund", "money back", "iade"]
+    }
+  ],
+
+  "model": "fast",
+  "prompt": "intent.classify.v1",
+  "minimumConfidence": 0.6
+}

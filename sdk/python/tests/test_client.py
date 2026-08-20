@@ -108,8 +108,24 @@ def test_says_which_workflow_is_missing(mesh: PipeMesh):
     assert failure.value.not_found
 
 
-def test_process_says_plainly_that_it_is_not_built_yet(mesh: PipeMesh):
-    with pytest.raises(PipeMeshError) as failure:
-        mesh.process("book me a hall in Antalya")
+def test_process_reads_a_message_and_runs_what_it_asked_for(mesh: PipeMesh):
+    handle = mesh.process("please book a venue for Friday", {"price": 250})
 
-    assert failure.value.unimplemented
+    assert handle.status is ExecutionStatus.WAITING
+    assert handle.current_step == "approval"
+
+
+def test_process_records_which_intent_started_it(mesh: PipeMesh):
+    handle = mesh.process("book a venue", {"price": 250})
+
+    intent = mesh.get(handle.execution_id).variables["intent"]
+
+    assert intent["id"] == "book_venue"
+    assert intent["resolvedBy"] == "deterministic"
+
+
+def test_process_says_when_it_could_not_tell_what_was_meant(mesh: PipeMesh):
+    with pytest.raises(PipeMeshError) as failure:
+        mesh.process("what is the weather like in Antalya")
+
+    assert failure.value.failed_precondition

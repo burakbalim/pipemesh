@@ -110,6 +110,11 @@ export class PipeMeshError extends Error {
   get unimplemented(): boolean {
     return this.code === grpc.status.UNIMPLEMENTED;
   }
+
+  /** The call was fine; the runtime could not act on it as asked. */
+  get failedPrecondition(): boolean {
+    return this.code === grpc.status.FAILED_PRECONDITION;
+  }
 }
 
 export interface PipeMeshOptions {
@@ -151,13 +156,23 @@ export class PipeMesh {
   }
 
   /**
-   * Let the runtime choose the workflow from a natural-language message.
+   * Let the runtime read the message and run whatever it asks for.
    *
-   * Not available yet: choosing needs intent resolution, and the server answers
-   * UNIMPLEMENTED rather than guessing.
+   * Rejects with `FAILED_PRECONDITION` when the message does not settle on an
+   * intent. That is not a bad request: the call was fine, the runtime could not
+   * tell what to do with it, and sending the same words again will not help.
    */
-  process(message: string): Promise<ExecutionHandle> {
-    return this.unary<ExecutionHandle>("ProcessMessage", { message }, toHandle);
+  process(
+    message: string,
+    input: Record<string, unknown> = {},
+    options: { organization?: string; traceparent?: string } = {},
+  ): Promise<ExecutionHandle> {
+    return this.unary<ExecutionHandle>("ProcessMessage", {
+      message,
+      input: toStruct(input),
+      organizationId: options.organization ?? this.organization,
+      traceparent: options.traceparent ?? "",
+    }, toHandle);
   }
 
   approve(executionId: string, approvalId: string, decidedBy = "", comment = ""): Promise<ExecutionHandle> {

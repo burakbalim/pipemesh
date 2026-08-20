@@ -1,5 +1,6 @@
 package io.pipemesh.core.execution;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.pipemesh.core.workflow.WorkflowId;
 
 import java.util.Objects;
@@ -20,7 +21,15 @@ public record ExecutionRequest(
         WorkflowId workflowId,
         ExecutionInput input,
         OrganizationId organization,
-        String traceParent) {
+        String traceParent,
+        JsonNode intent) {
+
+    public ExecutionRequest(
+            WorkflowId workflowId, ExecutionInput input,
+            OrganizationId organization, String traceParent) {
+
+        this(workflowId, input, organization, traceParent, null);
+    }
 
     public ExecutionRequest {
         Objects.requireNonNull(workflowId, "workflow id");
@@ -38,7 +47,22 @@ public record ExecutionRequest(
     }
 
     public ExecutionRequest within(String traceParent) {
-        return new ExecutionRequest(workflowId, input, organization, traceParent);
+        return new ExecutionRequest(workflowId, input, organization, traceParent, intent);
+    }
+
+    /**
+     * Records how this execution came to be started.
+     *
+     * <p>An execution begun from a natural-language message should be able to say
+     * which intent was read from it and how — otherwise "why did this run?" has no
+     * answer anywhere (§19).
+     */
+    public ExecutionRequest resolvedFrom(JsonNode intent) {
+        return new ExecutionRequest(workflowId, input, organization, traceParent, intent);
+    }
+
+    public Optional<JsonNode> intentIfAny() {
+        return Optional.ofNullable(intent);
     }
 
     public Optional<String> traceParentIfAny() {

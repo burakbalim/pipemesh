@@ -1,5 +1,10 @@
 package io.pipemesh.core.execution;
 
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.pipemesh.core.intent.IntentResolver;
+import io.pipemesh.core.intent.IntentUnresolvedException;
+import io.pipemesh.core.intent.ResolvedIntent;
 import io.pipemesh.core.state.ExecutionRecord;
 import io.pipemesh.core.state.StateStore;
 import io.pipemesh.core.workflow.ExecutionGraph;
@@ -22,12 +27,27 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
     private final WorkflowRegistry workflows;
     private final StateStore stateStore;
     private final WorkflowExecutor executor;
+    private final IntentResolver intents;
 
     public DefaultWorkflowRuntime(
             WorkflowRegistry workflows, StateStore stateStore, WorkflowExecutor executor) {
+        this(workflows, stateStore, executor, null);
+    }
+
+    /**
+     * @param intents how a natural-language message is turned into a workflow, or
+     *                {@code null} for a runtime that only runs workflows it is
+     *                told the name of. Absent is a limit, not a fault — plenty of
+     *                deployments never need a message read.
+     */
+    public DefaultWorkflowRuntime(
+            WorkflowRegistry workflows, StateStore stateStore, WorkflowExecutor executor,
+            IntentResolver intents) {
+
         this.workflows = Objects.requireNonNull(workflows, "workflow registry");
         this.stateStore = Objects.requireNonNull(stateStore, "state store");
         this.executor = Objects.requireNonNull(executor, "executor");
+        this.intents = intents;
     }
 
     @Override
@@ -37,6 +57,39 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
                         "no workflow registered as '" + request.workflowId() + "'"));
 
         return handleOf(executor.start(graph, ExecutionId.generate(), request));
+    }
+
+    @Override
+    public ExecutionHandle process(ProcessRequest request) {
+        if (intents == null) {
+            throw new IntentUnresolvedException(
+                    "this runtime has no intent resolution; name a workflow and use start()");
+        }
+
+        ResolvedIntent resolved = intents.resolve(request.message());
+
+        // Two steps, plainly: the resolver named a workflow, and now the engine
+        // runs it. Nothing the resolver said reaches any further than this line.
+        return start(new ExecutionRequest(
+                resolved.workflow(),
+                request.input(),
+                request.organization(),
+                request.traceParent(),
+                describe(resolved)));
+    }
+
+    /** What the execution should be able to say about why it ran. */
+    private ObjectNode describe(ResolvedIntent resolved) {
+        ObjectNode intent = JsonNodeFactory.instance.objectNode()
+                .put("id", resolved.intent().value())
+                .put("resolvedBy", resolved.source().name().toLowerCase());
+
+        resolved.modelIfAny().ifPresent(model -> intent
+                .put("model", model)
+                .put("promptVersion", resolved.promptVersion())
+                .put("confidence", resolved.confidence()));
+
+        return intent;
     }
 
     /**

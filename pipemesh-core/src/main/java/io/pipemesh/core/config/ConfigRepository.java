@@ -6,6 +6,9 @@ import io.pipemesh.core.capability.CapabilityDescriptor;
 import io.pipemesh.core.capability.CapabilityId;
 import io.pipemesh.core.capability.CapabilityKind;
 import io.pipemesh.core.capability.InMemoryCapabilityRegistry;
+import io.pipemesh.core.intent.IntentDefinition;
+import io.pipemesh.core.intent.IntentId;
+import io.pipemesh.core.intent.IntentRegistry;
 import io.pipemesh.core.model.InMemoryModelRegistry;
 import io.pipemesh.core.model.ModelId;
 import io.pipemesh.core.prompt.InMemoryPromptRegistry;
@@ -13,6 +16,7 @@ import io.pipemesh.core.prompt.PromptId;
 import io.pipemesh.core.schema.InMemorySchemaRegistry;
 import io.pipemesh.core.workflow.WorkflowDefinition;
 import io.pipemesh.core.workflow.WorkflowDefinitionReader;
+import io.pipemesh.core.workflow.WorkflowId;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,6 +42,7 @@ import java.util.stream.Stream;
  * ├── workflows/     one JSON per workflow
  * ├── models/        models.json — aliases and the protocol behind each
  * ├── capabilities/  one JSON per capability registration
+ * ├── intents/       intents.json — what a message can be read as
  * ├── prompts/       group/name.version.md
  * └── schemas/       structured-output schemas, referenced by file name
  * </pre>
@@ -103,6 +108,49 @@ public final class ConfigRepository {
             registry.register(capability(parse(file), file));
         }
         return registry;
+    }
+
+    /**
+     * The intents a message can be read as (§19).
+     *
+     * <p>An empty registry is a runtime that only runs workflows it is told the
+     * name of — a limit, not a misconfiguration.
+     */
+    public IntentRegistry intents() {
+        Path file = root.resolve("intents").resolve("intents.json");
+        if (!Files.isRegularFile(file)) {
+            return IntentRegistry.of(List.of());
+        }
+        JsonNode json = parse(file);
+
+        List<IntentDefinition> intents = new ArrayList<>();
+        for (JsonNode intent : json.path("intents")) {
+            intents.add(new IntentDefinition(
+                    IntentId.of(required(intent, "id", file)),
+                    WorkflowId.of(required(intent, "workflow", file)),
+                    intent.path("description").asText(""),
+                    phrases(intent)));
+        }
+
+        return new IntentRegistry(
+                intents,
+                json.path("model").asText(""),
+                json.path("prompt").asText(""),
+                json.path("minimumConfidence").asDouble(IntentRegistry.DEFAULT_MINIMUM_CONFIDENCE));
+    }
+
+    private List<String> phrases(JsonNode intent) {
+        List<String> matches = new ArrayList<>();
+        intent.path("matches").forEach(phrase -> matches.add(phrase.asText()));
+        return List.copyOf(matches);
+    }
+
+    private String required(JsonNode node, String field, Path file) {
+        String value = node.path(field).asText("");
+        if (value.isBlank()) {
+            throw new ConfigException(file.getFileName() + ": an intent is missing '" + field + "'");
+        }
+        return value;
     }
 
     /** Schemas, keyed by file name: {@code schemas/venue-request.json} is {@code venue-request}. */

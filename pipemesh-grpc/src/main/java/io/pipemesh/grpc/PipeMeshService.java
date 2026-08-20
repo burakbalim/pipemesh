@@ -6,6 +6,8 @@ import io.grpc.stub.StreamObserver;
 import io.pipemesh.core.execution.ExecutionId;
 import io.pipemesh.core.execution.ExecutionInput;
 import io.pipemesh.core.execution.ExecutionRequest;
+import io.pipemesh.core.execution.ProcessRequest;
+import io.pipemesh.core.intent.IntentUnresolvedException;
 import io.pipemesh.core.execution.OrganizationId;
 import io.pipemesh.core.execution.ResumeSignal;
 import io.pipemesh.core.execution.WorkflowRuntime;
@@ -53,15 +55,29 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
     }
 
     /**
-     * Not implemented. Intent resolution decides which workflow to run, and until
-     * that exists this would have to guess — which is precisely the thing the
-     * design refuses to let a runtime do (§19, §20).
+     * Reads the message, then runs whatever workflow it asked for (§19).
+     *
+     * <p>A message that does not settle on an intent answers
+     * {@code FAILED_PRECONDITION} rather than {@code INVALID_ARGUMENT}: the
+     * request was well formed, the runtime simply could not tell what to do with
+     * it — and a client that cannot see that difference will retry the wrong
+     * things.
      */
     @Override
     public void processMessage(ProcessMessageRequest request, StreamObserver<ExecutionHandle> response) {
-        response.onError(Status.UNIMPLEMENTED
-                .withDescription("intent resolution is not implemented yet; name a workflow and use StartExecution")
-                .asRuntimeException());
+        try {
+            response.onNext(WireTypes.toWire(runtime.process(new ProcessRequest(
+                    request.getMessage(),
+                    new ExecutionInput(JsonStructs.toJson(request.getInput())),
+                    organizationOf(request.getOrganizationId()),
+                    request.getTraceparent()))));
+            response.onCompleted();
+        } catch (IntentUnresolvedException unresolved) {
+            response.onError(Status.FAILED_PRECONDITION
+                    .withDescription(unresolved.getMessage()).asRuntimeException());
+        } catch (RuntimeException failure) {
+            response.onError(Status.INTERNAL.withDescription(failure.getMessage()).asRuntimeException());
+        }
     }
 
     @Override

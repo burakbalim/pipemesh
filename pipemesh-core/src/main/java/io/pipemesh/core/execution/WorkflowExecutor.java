@@ -56,6 +56,7 @@ public final class WorkflowExecutor {
     public static final int DEFAULT_STEP_BUDGET = 1_000;
 
     private static final String INPUT_VARIABLE = "input";
+    private static final String INTENT_VARIABLE = "intent";
 
     /** History entries the engine itself writes, rather than a step executor. */
     private static final StepType ENGINE_STEP = StepType.of("engine");
@@ -476,6 +477,7 @@ public final class WorkflowExecutor {
 
         ObjectNode variables = JsonNodeFactory.instance.objectNode();
         variables.set(INPUT_VARIABLE, request.input().value());
+        request.intentIfAny().ifPresent(intent -> variables.set(INTENT_VARIABLE, intent));
 
         // A caller already inside a trace passes its context in, so the workflow
         // hangs under the request that asked for it rather than starting a trace

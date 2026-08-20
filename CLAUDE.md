@@ -96,6 +96,9 @@ passes the tests — say so rather than accepting it.
   strange.
 - **No inline code in workflow definitions.** A workflow names a capability; it never carries a body
   to execute. Schemas must be closed (`additionalProperties: false`) (§23.1).
+- **Reading a message picks a workflow and stops there.** An intent resolver returns a workflow id
+  and nothing else — not a step to start at, not a branch to take. The moment it says more, the
+  model is running the application (§19, §20, §37).
 - **Business logic stays in the application.** The runtime knows *when* a capability runs, never
   *what* it does (§3).
 - **The proto is the authoritative API contract.** The Java API is one binding; the gRPC service is a

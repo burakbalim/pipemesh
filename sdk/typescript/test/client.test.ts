@@ -171,10 +171,27 @@ describe("PipeMesh client", () => {
     );
   });
 
-  it("says plainly that process() is not built yet", async () => {
+  it("reads a message and runs what it asked for", async () => {
+    const handle = await mesh.process("please book a venue for Friday", { price: 250 });
+
+    assert.equal(handle.status, "WAITING");
+    assert.equal(handle.currentStep, "approval");
+  });
+
+  it("records which intent started it", async () => {
+    const handle = await mesh.process("book a venue", { price: 250 });
+
+    const snapshot = await mesh.get(handle.executionId);
+    const intent = (snapshot.variables as any).intent;
+
+    assert.equal(intent.id, "book_venue");
+    assert.equal(intent.resolvedBy, "deterministic");
+  });
+
+  it("says when it could not tell what was meant", async () => {
     await assert.rejects(
-      () => mesh.process("book me a hall in Antalya"),
-      (failure: PipeMeshError) => failure.unimplemented,
+      () => mesh.process("what is the weather like in Antalya"),
+      (failure: PipeMeshError) => failure.failedPrecondition,
     );
   });
 });

@@ -11,6 +11,12 @@ import io.pipemesh.core.execution.WorkflowExecutor;
 import io.pipemesh.core.execution.WorkflowRuntime;
 import io.pipemesh.core.execution.step.ApprovalStepExecutor;
 import io.pipemesh.core.execution.step.CapabilityStepExecutor;
+import io.pipemesh.core.intent.DefaultIntentResolver;
+import io.pipemesh.core.intent.IntentDefinition;
+import io.pipemesh.core.intent.IntentId;
+import io.pipemesh.core.intent.IntentRegistry;
+import io.pipemesh.core.model.InMemoryModelRegistry;
+import io.pipemesh.core.prompt.InMemoryPromptRegistry;
 import io.pipemesh.core.execution.step.ConditionStepExecutor;
 import io.pipemesh.core.execution.step.TerminalStepExecutor;
 import io.pipemesh.core.state.memory.InMemoryApprovalStore;
@@ -18,6 +24,7 @@ import io.pipemesh.core.state.memory.InMemoryStateStore;
 import io.pipemesh.core.workflow.InMemoryWorkflowRegistry;
 import io.pipemesh.core.workflow.WorkflowCompiler;
 import io.pipemesh.core.workflow.WorkflowDefinitionReader;
+import io.pipemesh.core.workflow.WorkflowId;
 
 import java.util.List;
 
@@ -89,8 +96,16 @@ public final class TestRuntimeServer {
         workflows.register(new WorkflowDefinitionReader().read(BOOKING));
         workflows.register(new WorkflowDefinitionReader().read(DISCOUNT));
 
+        IntentRegistry knownIntents = IntentRegistry.of(List.of(
+                new IntentDefinition(IntentId.of("book_venue"), WorkflowId.of("venue_booking"),
+                        "The user wants to book a venue", List.of("book a venue", "mekan ayır")),
+                new IntentDefinition(IntentId.of("check_discount"), WorkflowId.of("discount_check"),
+                        "The user asks what discount applies", List.of("discount", "indirim"))));
+
         WorkflowRuntime runtime = new DefaultWorkflowRuntime(
-                workflows, stateStore, new WorkflowExecutor(stateStore, executors, broker));
+                workflows, stateStore, new WorkflowExecutor(stateStore, executors, broker),
+                new DefaultIntentResolver(
+                        knownIntents, new InMemoryModelRegistry(), new InMemoryPromptRegistry()));
 
         PipeMeshServer server =
                 new PipeMeshServer(runtime, broker, 0, null, workers).start();

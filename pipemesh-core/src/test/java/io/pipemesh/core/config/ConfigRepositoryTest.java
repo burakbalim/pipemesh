@@ -170,6 +170,26 @@ class ConfigRepositoryTest {
     }
 
     @Test
+    void readsTheIntentsAMessageCanBeReadAs() {
+        var intents = config.intents();
+
+        assertEquals(2, intents.intents().size());
+        assertTrue(intents.canAskAModel(), "the example configures a model for the hard cases");
+        assertEquals(0.6, intents.minimumConfidence(), 0.0001);
+    }
+
+    @Test
+    void everyIntentNamesAWorkflowThatExists() {
+        var workflows = config.workflows().stream()
+                .map(workflow -> workflow.id().value())
+                .toList();
+
+        assertTrue(config.intents().intents().stream()
+                        .allMatch(intent -> workflows.contains(intent.workflow().value())),
+                "an intent pointing at a workflow nobody registered would fail only when someone said the words");
+    }
+
+    @Test
     void rejectsADirectoryThatIsNotThere() {
         assertThrows(ConfigException.class, () -> new ConfigRepository(Path.of("no", "such", "place")));
     }

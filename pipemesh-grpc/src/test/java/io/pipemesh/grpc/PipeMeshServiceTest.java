@@ -12,12 +12,19 @@ import io.pipemesh.core.execution.WorkflowExecutor;
 import io.pipemesh.core.execution.WorkflowRuntime;
 import io.pipemesh.core.execution.step.ApprovalStepExecutor;
 import io.pipemesh.core.execution.step.ConditionStepExecutor;
+import io.pipemesh.core.intent.DefaultIntentResolver;
+import io.pipemesh.core.intent.IntentDefinition;
+import io.pipemesh.core.intent.IntentId;
+import io.pipemesh.core.intent.IntentRegistry;
+import io.pipemesh.core.model.InMemoryModelRegistry;
+import io.pipemesh.core.prompt.InMemoryPromptRegistry;
 import io.pipemesh.core.execution.step.TerminalStepExecutor;
 import io.pipemesh.core.state.memory.InMemoryApprovalStore;
 import io.pipemesh.core.state.memory.InMemoryStateStore;
 import io.pipemesh.core.workflow.InMemoryWorkflowRegistry;
 import io.pipemesh.core.workflow.WorkflowCompiler;
 import io.pipemesh.core.workflow.WorkflowDefinitionReader;
+import io.pipemesh.core.workflow.WorkflowId;
 import io.pipemesh.proto.v1.ExecutionStatus;
 import io.pipemesh.proto.v1.GetExecutionRequest;
 import io.pipemesh.proto.v1.PipeMeshGrpc;
@@ -79,7 +86,13 @@ class PipeMeshServiceTest {
         workflows.register(new WorkflowDefinitionReader().read(BOOKING));
 
         WorkflowRuntime runtime = new DefaultWorkflowRuntime(
-                workflows, stateStore, new WorkflowExecutor(stateStore, executors, broker));
+                workflows, stateStore, new WorkflowExecutor(stateStore, executors, broker),
+                new DefaultIntentResolver(
+                        IntentRegistry.of(List.of(new IntentDefinition(
+                                IntentId.of("book_venue"), WorkflowId.of("venue_booking"),
+                                "The user wants to book a venue",
+                                List.of("book a venue")))),
+                        new InMemoryModelRegistry(), new InMemoryPromptRegistry()));
 
         // A real socket rather than the in-process transport: the streaming calls
         // here are exactly what a client in another language makes, and the
@@ -179,12 +192,43 @@ class PipeMeshServiceTest {
     }
 
     @Test
-    void saysPlainlyThatIntentResolutionIsNotBuiltYet() {
+    void readsAMessageAndRunsWhatItAskedFor() {
+        var handle = client.processMessage(ProcessMessageRequest.newBuilder()
+                .setMessage("I would like to book a venue for Friday")
+                .setOrganizationId("acme")
+                .setInput(input("{\"price\":250}"))
+                .build());
+
+        assertEquals(ExecutionStatus.EXECUTION_STATUS_WAITING, handle.getStatus());
+        assertEquals("approval", handle.getCurrentStepId());
+    }
+
+    @Test
+    void recordsWhichIntentStartedTheExecution() {
+        var handle = client.processMessage(ProcessMessageRequest.newBuilder()
+                .setMessage("book a venue please")
+                .setOrganizationId("acme")
+                .setInput(input("{\"price\":250}"))
+                .build());
+
+        var variables = client.getExecution(GetExecutionRequest.newBuilder()
+                .setExecutionId(handle.getExecutionId()).build()).getVariables();
+
+        var intent = variables.getFieldsOrThrow("intent").getStructValue();
+        assertEquals("book_venue", intent.getFieldsOrThrow("id").getStringValue());
+        assertEquals("deterministic", intent.getFieldsOrThrow("resolvedBy").getStringValue());
+    }
+
+    @Test
+    void saysItCouldNotTellWhatAMessageMeant() {
         StatusRuntimeException failure = assertThrows(StatusRuntimeException.class,
                 () -> client.processMessage(ProcessMessageRequest.newBuilder()
-                        .setMessage("book me a hall").build()));
+                        .setMessage("what is the weather like in Antalya")
+                        .setOrganizationId("acme")
+                        .build()));
 
-        assertEquals(io.grpc.Status.Code.UNIMPLEMENTED, failure.getStatus().getCode());
+        assertEquals(io.grpc.Status.Code.FAILED_PRECONDITION, failure.getStatus().getCode(),
+                "the request was fine; the runtime could not tell what to do with it");
     }
 
     @Test

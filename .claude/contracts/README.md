@@ -15,7 +15,7 @@ onunla çelişmez.
 | 2 | [reliability-policies.md](reliability-policies.md) | §17 Retry, §18 Failure handling, timeout, fallback model | **Tamam** (2026-08-20) |
 | 3 | [structured-output.md](structured-output.md) | §21 Structured output, §11 prompt registry, §24 versiyonlama | **Tamam** (2026-08-20) |
 | 4 | [streaming.md](streaming.md) | §30 Streaming, provider sınırında token akışı | **Tamam** (2026-08-20) |
-| 5 | _intent-resolution_ | §19 Intent resolution, §20 deterministic vs AI karar sınırı | Planlanan |
+| 5 | [intent-resolution.md](intent-resolution.md) | §19 Intent resolution, §20 deterministic vs AI karar sınırı | **Tamam** (2026-08-21) |
 | 6 | _parallel-and-transform_ | §9.5 Parallel, §9.6 Transform, §29 Concurrency/join | Planlanan |
 | 7 | _event-driven-wait_ | §9.7 Wait, §28 event-driven yürütme | Planlanan |
 | 8 | _capability-permissions_ | §23 Security model, MCP tool/resource izinleri | Planlanan |

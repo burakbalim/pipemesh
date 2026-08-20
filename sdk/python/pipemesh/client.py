@@ -117,6 +117,11 @@ class PipeMeshError(RuntimeError):
     def unimplemented(self) -> bool:
         return self.code is grpc.StatusCode.UNIMPLEMENTED
 
+    @property
+    def failed_precondition(self) -> bool:
+        """The call was fine; the runtime could not act on it as asked."""
+        return self.code is grpc.StatusCode.FAILED_PRECONDITION
+
 
 class PipeMesh:
     """A connection to a PipeMesh runtime.
@@ -164,14 +169,28 @@ class PipeMesh:
         )
         return _handle(self._call(self._stub.StartExecution, request))
 
-    def process(self, message: str, **_: Any) -> ExecutionHandle:
-        """Let the runtime choose the workflow from a natural-language message.
+    def process(
+        self,
+        message: str,
+        payload: Optional[Mapping[str, Any]] = None,
+        *,
+        organization: Optional[str] = None,
+        traceparent: str = "",
+    ) -> ExecutionHandle:
+        """Let the runtime read the message and run whatever it asks for.
 
-        Not available yet: choosing needs intent resolution, and the server
-        answers ``UNIMPLEMENTED`` rather than guessing.
+        Raises :class:`PipeMeshError` with ``failed_precondition`` when the
+        message does not settle on an intent. That is not the same as a bad
+        request: the call was fine, the runtime could not tell what to do with
+        it, and retrying the same words will not help.
         """
-        return _handle(self._call(
-            self._stub.ProcessMessage, pb.ProcessMessageRequest(message=message)))
+        request = pb.ProcessMessageRequest(
+            message=message,
+            input=_to_struct(payload),
+            organization_id=organization or self._organization,
+            traceparent=traceparent,
+        )
+        return _handle(self._call(self._stub.ProcessMessage, request))
 
     def approve(
         self,

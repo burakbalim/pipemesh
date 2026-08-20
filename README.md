@@ -185,8 +185,8 @@ examples/       # simple-chat, tool-calling, approval-flow, parallel-flow
 
 ## Roadmap
 
-- **Phase 1** ✅ — Workflow JSON, LLM step, condition, capability step, human approval, durable
-  state, resume, MCP, observability. Intent resolution is the one Phase 1 item still open.
+- **Phase 1** ✅ — Workflow JSON, intent resolution, LLM step, condition, capability step, human
+  approval, durable state, resume, MCP, observability.
 - **Phase 2** — MCP, structured output, retry, timeout, streaming, prompt registry
 - **Phase 3** — Persistent state, human approval, resume, parallel execution, event-driven execution
 - **Phase 4** — OpenTelemetry, workflow versioning, evaluation, cost tracking, model routing,
