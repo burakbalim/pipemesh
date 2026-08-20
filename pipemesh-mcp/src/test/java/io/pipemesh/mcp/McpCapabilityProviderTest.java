@@ -5,10 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.pipemesh.core.capability.CapabilityCall;
 import io.pipemesh.core.capability.CapabilityDescriptor;
 import io.pipemesh.core.capability.CapabilityId;
 import io.pipemesh.core.capability.CapabilityKind;
 import io.pipemesh.core.capability.CapabilityResult;
+import io.pipemesh.core.execution.ExecutionId;
+import io.pipemesh.core.execution.OrganizationId;
+import io.pipemesh.core.workflow.StepId;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -53,6 +57,10 @@ class McpCapabilityProviderTest {
         }
     }
 
+    /** The routing context an MCP capability does not need but every provider is given. */
+    private static final CapabilityCall ANY_CALL = new CapabilityCall(
+            OrganizationId.of("acme"), ExecutionId.of("exec-1"), StepId.of("search"), "");
+
     private CapabilityDescriptor capability(String tool, ObjectNode extraExecution) {
         ObjectNode execution = JsonNodeFactory.instance.objectNode()
                 .put("type", "mcp")
@@ -83,7 +91,7 @@ class McpCapabilityProviderTest {
     void callsAToolWithAnObjectAsItsArguments() throws Exception {
         JsonNode input = JSON.readTree("{\"location\":\"Antalya\"}");
 
-        CapabilityResult result = provider.invoke(capability("search", null), input);
+        CapabilityResult result = provider.invoke(capability("search", null), input, ANY_CALL);
 
         CapabilityResult.Success success = assertInstanceOf(CapabilityResult.Success.class, result);
         assertEquals("Kaleici Hall", success.output().get(0).path("name").asText());
@@ -95,7 +103,7 @@ class McpCapabilityProviderTest {
         CapabilityDescriptor capability = capability("search",
                 JsonNodeFactory.instance.objectNode().put("argument", "location"));
 
-        CapabilityResult result = provider.invoke(capability, TextNode.valueOf("Izmir"));
+        CapabilityResult result = provider.invoke(capability, TextNode.valueOf("Izmir"), ANY_CALL);
 
         CapabilityResult.Success success = assertInstanceOf(CapabilityResult.Success.class, result);
         assertEquals("Izmir", success.output().get(0).path("city").asText());
@@ -106,7 +114,7 @@ class McpCapabilityProviderTest {
         CapabilityDescriptor capability = capability("echo",
                 JsonNodeFactory.instance.objectNode().put("argument", "input"));
 
-        CapabilityResult result = provider.invoke(capability, TextNode.valueOf("just words"));
+        CapabilityResult result = provider.invoke(capability, TextNode.valueOf("just words"), ANY_CALL);
 
         CapabilityResult.Success success = assertInstanceOf(CapabilityResult.Success.class, result);
         assertEquals("just words", success.output().asText());
@@ -115,7 +123,7 @@ class McpCapabilityProviderTest {
     @Test
     void reportsAToolThatAnsweredWithAnError() {
         CapabilityResult result = provider.invoke(
-                capability("explode", null), JSON.createObjectNode().put("input", "x"));
+                capability("explode", null), JSON.createObjectNode().put("input", "x"), ANY_CALL);
 
         CapabilityResult.Failure failure = assertInstanceOf(CapabilityResult.Failure.class, result);
         assertEquals("mcp.tool_error", failure.code());
@@ -125,7 +133,7 @@ class McpCapabilityProviderTest {
     @Test
     void reportsACapabilityPointingAtAServerThatIsNotConnected() {
         CapabilityResult result = provider.invoke(
-                onServer("nowhere"), JSON.createObjectNode());
+                onServer("nowhere"), JSON.createObjectNode(), ANY_CALL);
 
         CapabilityResult.Failure failure = assertInstanceOf(CapabilityResult.Failure.class, result);
         assertEquals("mcp.unknown_server", failure.code());
@@ -136,7 +144,7 @@ class McpCapabilityProviderTest {
         CapabilityDescriptor missingTool = capability("no_such_tool", null);
 
         CapabilityResult result = provider.invoke(
-                missingTool, JSON.createObjectNode().put("location", "Antalya"));
+                missingTool, JSON.createObjectNode().put("location", "Antalya"), ANY_CALL);
 
         CapabilityResult.Failure failure = assertInstanceOf(CapabilityResult.Failure.class, result);
         assertTrue(failure.code().startsWith("mcp."), failure.code());

@@ -36,12 +36,32 @@ public final class PipeMeshServer implements AutoCloseable {
     public PipeMeshServer(
             WorkflowRuntime runtime, ExecutionUpdateBroker broker, int port, RecoveryScheduler recovery) {
 
+        this(runtime, broker, port, recovery, null);
+    }
+
+    /**
+     * @param workers the registry the {@code CapabilityWorker} service registers
+     *                into, or {@code null} to serve callers only. Handing one in
+     *                is what lets business code in another process be invoked as
+     *                a capability (§26.1).
+     */
+    public PipeMeshServer(
+            WorkflowRuntime runtime,
+            ExecutionUpdateBroker broker,
+            int port,
+            RecoveryScheduler recovery,
+            WorkerRegistry workers) {
+
         Objects.requireNonNull(runtime, "runtime");
         Objects.requireNonNull(broker, "broker");
         this.recovery = recovery;
-        this.server = ServerBuilder.forPort(port)
-                .addService(new PipeMeshService(runtime, broker))
-                .build();
+
+        ServerBuilder<?> builder = ServerBuilder.forPort(port)
+                .addService(new PipeMeshService(runtime, broker));
+        if (workers != null) {
+            builder.addService(new CapabilityWorkerService(workers));
+        }
+        this.server = builder.build();
     }
 
     public PipeMeshServer start() throws IOException {

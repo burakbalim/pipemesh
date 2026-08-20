@@ -2,6 +2,7 @@ package io.pipemesh.core.execution.step;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import io.pipemesh.core.capability.CapabilityCall;
 import io.pipemesh.core.capability.CapabilityDescriptor;
 import io.pipemesh.core.capability.CapabilityId;
 import io.pipemesh.core.capability.CapabilityProvider;
@@ -77,7 +78,7 @@ public final class CapabilityStepExecutor implements StepExecutor {
                             + "' provider, which is not registered", false);
         }
 
-        CapabilityResult result = provider.invoke(descriptor, inputFor(config, context));
+        CapabilityResult result = provider.invoke(descriptor, inputFor(config, context), callOf(step, context));
         return switch (retryableOnly(descriptor, result)) {
             case CapabilityResult.Success success -> new StepResult.Continue(
                     StepId.of(required(config, NEXT)),
@@ -108,6 +109,11 @@ public final class CapabilityStepExecutor implements StepExecutor {
         return capabilities.find(CapabilityId.of(id))
                 .map(CapabilityDescriptor::idempotent)
                 .orElse(true);
+    }
+
+    private CapabilityCall callOf(Step step, ExecutionContext context) {
+        return new CapabilityCall(
+                context.organization(), context.executionId(), step.id(), context.traceParent());
     }
 
     /**

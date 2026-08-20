@@ -1,6 +1,7 @@
 package io.pipemesh.core.execution;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import io.pipemesh.core.capability.CapabilityCall;
 import io.pipemesh.core.capability.CapabilityDescriptor;
 import io.pipemesh.core.capability.CapabilityId;
 import io.pipemesh.core.capability.CapabilityKind;
@@ -52,7 +53,8 @@ class RecoverySweeperTest {
 
         @Override
         public CapabilityResult invoke(CapabilityDescriptor capability,
-                                       com.fasterxml.jackson.databind.JsonNode input) {
+                                       com.fasterxml.jackson.databind.JsonNode input,
+                                       CapabilityCall call) {
             return new CapabilityResult.Success(JsonNodeFactory.instance.objectNode().put("found", 1));
         }
     }

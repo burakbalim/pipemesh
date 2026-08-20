@@ -101,8 +101,102 @@ demektir.** Bunu yumuşatmak (örneğin "muhtemelen ulaşmadı, tekrar dene") ta
 
 ## Split Decision
 
-_To be filled by Agent 0_
+**Decision:** single-prompt (aşamalı, tek ajan)
+**Tarih:** 2026-08-20
+
+**Reasoning:**
+
+Beş dokunuş noktası var (gRPC servisi, core provider, iki SDK, örnek) ama **paralellik ancak
+birinci aşamadan sonra doğuyor**: hiçbir SDK worker'ı, Java tarafındaki kayıt defteri ve
+yönlendirme olmadan bağlanamaz. Sonrasında Python ve TypeScript worker'ları birbirinden bağımsız —
+ama SDK'ları yazarken öğrendiğimiz şey, aynı sözleşmenin her dilde farklı tuzağı olduğu
+(TypeScript'te Struct kodlaması, Python'da tembel generator). Birini bitirip diğerini onun kanıtlanmış
+şekline göre yazmak, ikisini paralel yazıp iki ayrı tuzağa aynı anda düşmekten iyi.
+
+### Build order
+
+1. **Worker kayıt defteri ve yönlendirme** — `CapabilityWorker.Connect`, invocation korelasyonu,
+   `WorkerCapabilityProvider`. Java tarafında bir test worker'ı ile doğrulanır.
+2. **Ölüm ve yokluk hâlleri** — worker invocation ortasında ölürse, hiç worker yoksa, bağlantı
+   koparsa. Organizasyon sınırı burada çizilir.
+3. **Python worker SDK'sı** + ayrı process testi.
+4. **TypeScript worker SDK'sı** — aynı sözleşme, kanıtlanmış şekle göre.
+5. **Örnek** — bir adımı MCP tool'u, bir adımı worker olan workflow.
+
+### Tasarım sorularının cevapları
+
+1. **Zaman aşımının sahibi runtime.** Step'in `timeout` politikası zaten motorda uygulanıyor
+   (iptal değil, terk). Worker'a deadline *bilgi olarak* gönderilecek ki kendi işini boşuna
+   sürdürmesin, ama adımın kaderine motor karar veriyor. **Ek olarak `WorkerCapabilityProvider`'ın
+   kendi varsayılan sınırı olmalı:** step'te `timeout` yazmayan bir workflow, ölü bir worker
+   yüzünden sonsuza kadar bloke olmamalı.
+2. **Round-robin.** Bağlı worker'lar arasında sıra ile; yük farkındalığı #10'un işi ve burada
+   yapmaya çalışmak erken bir optimizasyon olur. Idempotent bir capability'nin retry'ının *başka*
+   bir worker'a gitmesi zaten doğru davranış.
+3. **Worker kaydı organizasyona bağlı — ve bu sınır şimdi çizilmeli.** Bir organizasyonun
+   worker'ı başka bir organizasyonun invocation'ını almamalı. Tam izolasyon #17'nin işi ama
+   yönlendirmeyi sonradan organizasyon farkındalığı kazandırmak, sonradan sütun eklemek kadar
+   pahalı. Filtre baştan konuyor.
+4. **Worker yoksa hızlı düşsün, `retryable: true`.** Beklemek için yeni bir mekanizma icat etmek
+   yerine mevcut retry politikası kullanılıyor: `maxAttempts` yazan bir step, kısa bir worker
+   yeniden başlatmasını kendiliğinden atlatır. Sonsuza kadar beklemek, çağıranın göremediği bir
+   hang üretir.
+
+### Risk points
+
+- **Tek stream, çok invocation.** Bir worker'a aynı anda birden fazla çağrı gidebilir; korelasyon
+  `invocation_id` ile, ve **stream'e tek yazar** kuralı burada da geçerli — `UpdatePump`'ta
+  öğrendiğimiz şeyin aynısı. İki thread'in aynı worker stream'ine yazması gRPC ihlali.
+- **`CapabilityProvider.invoke` senkron.** Worker cevabını bekleyen bir latch gerekiyor. Bu
+  provider I/O olduğu için transaction dışında ve motorun `within(timeout)` sarmalayıcısının
+  içinde — yeni bir mekanizma gerekmiyor, ama varsayılan sınır (soru 1) olmazsa bu bekleyiş
+  sınırsız olur.
+- **Ölüm tespiti.** Worker'ın öldüğünü stream'in kapanmasından anlıyoruz; ama yarım kalan
+  invocation'ların sahibini bilmek için "hangi worker hangi invocation'ı tutuyor" kaydı gerekiyor.
+  Bu kayıt bellekte — runtime da ölürse execution `RUNNING`'de kalır ve `RecoveryScheduler`
+  toplar. İki mekanizmanın devreye girdiği yer burası ve testte ikisi birden gösterilmeli.
+- **Kapsam kayması.** Yük dağıtımı, worker sağlık kontrolü, çift yönlü akış (worker'ın runtime'a
+  olay göndermesi) bu dilime girmemeli.
 
 ## Implementation Notes
 
-_To be filled as work progresses_
+### Aşama 1-2 — Kayıt defteri, yönlendirme, ölüm hâlleri (2026-08-20) ✅
+
+**216 Java testi yeşil** (153 core + 13 Postgres + 16 provider + 9 MCP + 10 OTel + 15 gRPC).
+
+```
+core/capability/   CapabilityCall (yeni), CapabilityProvider imzası
+grpc/              CapabilityWorkerService, WorkerRegistry, ConnectedWorker,
+                   WorkerCapabilityProvider
+```
+
+**Tasarım kararları:**
+
+- **`CapabilityProvider.invoke` artık `CapabilityCall` alıyor.** Provider'lar organizasyonu
+  göremiyordu, ama yönlendirme onsuz yapılamaz. Yerel bir tool'a ulaşan provider bunu kullanmıyor;
+  uzak worker'a yönlendiren onsuz çalışamıyor — bu yüzden parametre, provider'ın uzanıp alacağı
+  bir şey değil. Proto zaten `organization_id` ve `traceparent` alanlarını öngörmüştü.
+- **Worker stream'ine tek yazar.** Bir worker'a eşzamanlı çağrılar gidiyor; `ConnectedWorker.invoke`
+  gönderimi senkronize ediyor. `UpdatePump`'ta öğrendiğimiz kuralın ters yönden gelişi.
+- **Cevap sorusunu `invocationId` ile buluyor.** Worker sırayla cevap vermek zorunda değil ve
+  sıklıkla vermeyecek.
+- **Worker ölümü `retryable: false`.** Worker çağrıyı aldı ve öldü; bu taraf çalışıp çalışmadığını
+  bilmiyor. Bunu çağıran adına karara bağlamak tam olarak çift tahsilat üreten tahmin —
+  yeniden denemeye izin veren şey capability'nin kendi idempotency beyanı ve o daha yukarıda
+  kontrol ediliyor.
+- **Worker yoksa `retryable: true`.** Beklemek için yeni mekanizma icat edilmedi; mevcut retry
+  politikası kısa bir worker restart'ını kendiliğinden atlatıyor. Sonsuza kadar beklemek
+  çağıranın göremediği bir hang üretirdi.
+- **Organizasyon filtresi yönlendirmede.** Bir organizasyonun worker'ı diğerinin invocation'ını
+  almıyor; bir test bunu doğruluyor. Tam izolasyon #17 ama sınır burada çizildi.
+- **`WorkerCapabilityProvider`'ın kendi varsayılan sınırı var** (60 sn). Step'in `timeout`
+  politikası otorite ve motor onu uyguluyor; bu, `timeout` yazmayan bir workflow'un ölü bir worker
+  yüzünden sonsuza kadar bloke olmaması için.
+
+**Testte düzeltilen bir yapaylık:** ilk hâlde worker ölümünü kayıt defterini elle dürterek
+canlandırıyordum. Gerçek bir worker ölümü stream'i kapatır — test artık worker'ın invocation'ı alıp
+hattı kapatmasıyla çalışıyor, yani `onCompleted → unregister → abandon` yolunun tamamı sınanıyor.
+
+### Sıradaki — Aşama 3
+
+Python worker SDK'sı ve ayrı process testi.

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.modelcontextprotocol.spec.McpSchema;
+import io.pipemesh.core.capability.CapabilityCall;
 import io.pipemesh.core.capability.CapabilityDescriptor;
 import io.pipemesh.core.capability.CapabilityProvider;
 import io.pipemesh.core.capability.CapabilityResult;
@@ -51,7 +52,8 @@ public final class McpCapabilityProvider implements CapabilityProvider {
     }
 
     @Override
-    public CapabilityResult invoke(CapabilityDescriptor capability, JsonNode input) {
+    public CapabilityResult invoke(
+            CapabilityDescriptor capability, JsonNode input, CapabilityCall call) {
         JsonNode execution = capability.execution();
         String serverName = execution.path("server").asText("");
         String tool = execution.path("tool").asText("");

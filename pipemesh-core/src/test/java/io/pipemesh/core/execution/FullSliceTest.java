@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.pipemesh.core.capability.CapabilityCall;
 import io.pipemesh.core.capability.CapabilityDescriptor;
 import io.pipemesh.core.capability.CapabilityId;
 import io.pipemesh.core.capability.CapabilityKind;
@@ -90,7 +91,8 @@ class FullSliceTest {
             implements CapabilityProvider {
 
         @Override
-        public CapabilityResult invoke(CapabilityDescriptor capability, JsonNode input) {
+        public CapabilityResult invoke(
+                CapabilityDescriptor capability, JsonNode input, CapabilityCall call) {
             inputsSeen.add(input);
             return new CapabilityResult.Success(
                     JSON.createArrayNode().add(JSON.createObjectNode().put("name", "Kaleici Hall")));

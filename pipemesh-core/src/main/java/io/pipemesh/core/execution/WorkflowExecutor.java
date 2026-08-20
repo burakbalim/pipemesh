@@ -461,7 +461,8 @@ public final class WorkflowExecutor {
                 record.workflowId(),
                 record.workflowVersion(),
                 record.currentStep(),
-                record.variables());
+                record.variables(),
+                record.traceContext());
     }
 
     private ObjectNode merged(ExecutionRecord record, Map<String, JsonNode> additions) {

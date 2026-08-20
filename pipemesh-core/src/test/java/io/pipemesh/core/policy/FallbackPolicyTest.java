@@ -1,6 +1,7 @@
 package io.pipemesh.core.policy;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import io.pipemesh.core.capability.CapabilityCall;
 import io.pipemesh.core.capability.CapabilityDescriptor;
 import io.pipemesh.core.capability.CapabilityId;
 import io.pipemesh.core.capability.CapabilityKind;
@@ -72,7 +73,8 @@ class FallbackPolicyTest {
     private record CountingProvider(String type, AtomicInteger calls) implements CapabilityProvider {
 
         @Override
-        public CapabilityResult invoke(CapabilityDescriptor capability, com.fasterxml.jackson.databind.JsonNode input) {
+        public CapabilityResult invoke(CapabilityDescriptor capability,
+                com.fasterxml.jackson.databind.JsonNode input, CapabilityCall call) {
             calls.incrementAndGet();
             return new CapabilityResult.Failure("payment.timeout", "no answer", true);
         }

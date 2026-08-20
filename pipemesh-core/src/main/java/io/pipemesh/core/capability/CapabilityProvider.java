@@ -11,11 +11,15 @@ import com.fasterxml.jackson.databind.JsonNode;
  * changes when a new transport appears (§9.8).
  *
  * <p>Invocations are provider I/O and must be made outside any open transaction.
+ *
+ * <p>{@link CapabilityCall} carries who is asking. Most providers ignore it; one
+ * that routes to a remote worker cannot work without it, which is why it is a
+ * parameter rather than something a provider has to reach for.
  */
 public interface CapabilityProvider {
 
     /** The {@code execution.type} this provider claims. */
     String type();
 
-    CapabilityResult invoke(CapabilityDescriptor capability, JsonNode input);
+    CapabilityResult invoke(CapabilityDescriptor capability, JsonNode input, CapabilityCall call);
 }

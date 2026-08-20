@@ -23,7 +23,15 @@ public record ExecutionContext(
         WorkflowId workflowId,
         WorkflowVersion workflowVersion,
         StepId currentStep,
-        ObjectNode variables) {
+        ObjectNode variables,
+        String traceParent) {
+
+    public ExecutionContext(
+            ExecutionId executionId, OrganizationId organization, WorkflowId workflowId,
+            WorkflowVersion workflowVersion, StepId currentStep, ObjectNode variables) {
+
+        this(executionId, organization, workflowId, workflowVersion, currentStep, variables, "");
+    }
 
     public ExecutionContext {
         Objects.requireNonNull(executionId, "execution id");
@@ -32,6 +40,7 @@ public record ExecutionContext(
         Objects.requireNonNull(workflowVersion, "workflow version");
         Objects.requireNonNull(currentStep, "current step");
         variables = variables == null ? JsonNodeFactory.instance.objectNode() : variables.deepCopy();
+        traceParent = traceParent == null ? "" : traceParent;
     }
 
     @Override
@@ -45,7 +54,7 @@ public record ExecutionContext(
 
     public ExecutionContext at(StepId step) {
         return new ExecutionContext(
-                executionId, organization, workflowId, workflowVersion, step, variables);
+                executionId, organization, workflowId, workflowVersion, step, variables, traceParent);
     }
 
     /** Returns a context with {@code additions} merged over the current variables. */
@@ -53,6 +62,6 @@ public record ExecutionContext(
         ObjectNode merged = variables.deepCopy();
         additions.forEach(merged::set);
         return new ExecutionContext(
-                executionId, organization, workflowId, workflowVersion, currentStep, merged);
+                executionId, organization, workflowId, workflowVersion, currentStep, merged, traceParent);
     }
 }
