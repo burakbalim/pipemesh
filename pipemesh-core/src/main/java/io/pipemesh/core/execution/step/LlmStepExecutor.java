@@ -14,6 +14,9 @@ import io.pipemesh.core.model.ModelRegistry;
 import io.pipemesh.core.prompt.PromptId;
 import io.pipemesh.core.prompt.PromptRegistry;
 import io.pipemesh.core.prompt.PromptTemplate;
+import io.pipemesh.core.schema.JsonSchemaValidator;
+import io.pipemesh.core.schema.SchemaRegistry;
+import io.pipemesh.core.schema.SchemaViolation;
 import io.pipemesh.core.workflow.Step;
 import io.pipemesh.core.workflow.StepId;
 import io.pipemesh.core.workflow.StepType;
@@ -48,10 +51,17 @@ public final class LlmStepExecutor implements StepExecutor {
 
     private final ModelRegistry models;
     private final PromptRegistry prompts;
+    private final SchemaRegistry schemas;
+    private final JsonSchemaValidator validator = new JsonSchemaValidator();
 
     public LlmStepExecutor(ModelRegistry models, PromptRegistry prompts) {
+        this(models, prompts, schemaId -> Optional.empty());
+    }
+
+    public LlmStepExecutor(ModelRegistry models, PromptRegistry prompts, SchemaRegistry schemas) {
         this.models = Objects.requireNonNull(models, "model registry");
         this.prompts = Objects.requireNonNull(prompts, "prompt registry");
+        this.schemas = Objects.requireNonNull(schemas, "schema registry");
     }
 
     @Override
@@ -77,18 +87,63 @@ public final class LlmStepExecutor implements StepExecutor {
                     "no prompt registered as '" + promptId + "'", false);
         }
 
+        JsonNode schema;
+        try {
+            schema = schemaFor(config);
+        } catch (IllegalStateException unknownSchema) {
+            return new StepResult.Failed("llm.unknown_schema", unknownSchema.getMessage(), false);
+        }
+
         CompletionRequest request = new CompletionRequest(
                 model,
                 prompt.get().render(context.variables()),
                 promptId.version(),
-                config.has(OUTPUT_SCHEMA) ? config.get(OUTPUT_SCHEMA) : null);
+                schema);
 
         CompletionResponse response = provider.get().complete(request);
+        Map<String, JsonNode> attributes = attributesOf(model, promptId, response);
+
+        List<SchemaViolation> violations = schema == null
+                ? List.of()
+                : validator.validate(schema, response.content());
+
+        if (!violations.isEmpty()) {
+            // Retryable: a model that ignored the shape once will often honour it
+            // on a second pass, and the retry policy decides whether to spend one.
+            return new StepResult.Failed("llm.schema_violation",
+                    "the model's answer does not match '" + schemaName(config) + "': " + violations,
+                    true, attributes);
+        }
 
         return new StepResult.Continue(
                 StepId.of(required(config, NEXT)),
                 Map.of(required(config, OUTPUT), response.content()),
-                attributesOf(model, promptId, response));
+                attributes);
+    }
+
+    /**
+     * A step may name a schema or carry one inline.
+     *
+     * <p>Naming is what the examples do: a schema is a shared artifact, and two
+     * workflows extracting the same shape should not each own a copy that drifts
+     * (§24).
+     */
+    private JsonNode schemaFor(JsonNode config) {
+        JsonNode declared = config.get(OUTPUT_SCHEMA);
+        if (declared == null || declared.isNull()) {
+            return null;
+        }
+        if (declared.isObject()) {
+            return declared;
+        }
+        String schemaId = declared.asText("");
+        return schemas.find(schemaId).orElseThrow(() -> new IllegalStateException(
+                "no schema registered as '" + schemaId + "'"));
+    }
+
+    private String schemaName(JsonNode config) {
+        JsonNode declared = config.get(OUTPUT_SCHEMA);
+        return declared != null && declared.isTextual() ? declared.asText() : "the declared schema";
     }
 
     @Override

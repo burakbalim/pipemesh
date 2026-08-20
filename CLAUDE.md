@@ -88,6 +88,9 @@ passes the tests — say so rather than accepting it.
   unit the engine schedules — but it must not appear in the workflow DSL (§9.8).
 - **Ownership, version, deployment mechanism and permissions belong to the capability registration**,
   never to the workflow step. Permission enforcement happens in the registry, not the DSL (§23).
+- **Asking for a schema is not the same as enforcing one.** A model's answer is validated at the
+  step boundary, so a malformed shape fails there rather than three steps later as something
+  strange.
 - **No inline code in workflow definitions.** A workflow names a capability; it never carries a body
   to execute. Schemas must be closed (`additionalProperties: false`) (§23.1).
 - **Business logic stays in the application.** The runtime knows *when* a capability runs, never

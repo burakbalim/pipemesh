@@ -749,7 +749,8 @@ proto/pipemesh.proto    API contract'ı (implementasyon yok)
 | Kriter | Durum |
 |---|---|
 | JSON workflow runtime değişmeden yükleniyor ve çalışıyor | ✅ `ConfigRepositoryTest` |
-| LLM step structured output istiyor, şema ihlali `Failed` dönüyor | ✅ `OpenAiCompatibleProviderTest` |
+| LLM step structured output istiyor | ✅ `OpenAiCompatibleProviderTest` |
+| Şema ihlali `Failed` dönüyor | ❌ **Hatalı işaretlenmişti** — şema isteniyor ama doğrulanmıyor; contract #3'e devredildi |
 | Condition LLM çağırmadan deterministik değerlendiriyor | ✅ `ConditionExpressionTest` |
 | Capability step MCP tool'unu çağırıyor, workflow'da "mcp" geçmiyor | ✅ `WorkflowOverMcpTest` |
 | Approval'da `WAITING` persist ediliyor, thread bloklanmıyor | ✅ `ApprovalResumeTest` |

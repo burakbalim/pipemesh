@@ -10,6 +10,7 @@ import io.pipemesh.core.model.InMemoryModelRegistry;
 import io.pipemesh.core.model.ModelId;
 import io.pipemesh.core.prompt.InMemoryPromptRegistry;
 import io.pipemesh.core.prompt.PromptId;
+import io.pipemesh.core.schema.InMemorySchemaRegistry;
 import io.pipemesh.core.workflow.WorkflowDefinition;
 import io.pipemesh.core.workflow.WorkflowDefinitionReader;
 
@@ -37,7 +38,8 @@ import java.util.stream.Stream;
  * ├── workflows/     one JSON per workflow
  * ├── models/        models.json — aliases and the protocol behind each
  * ├── capabilities/  one JSON per capability registration
- * └── prompts/       group/name.version.md
+ * ├── prompts/       group/name.version.md
+ * └── schemas/       structured-output schemas, referenced by file name
  * </pre>
  */
 public final class ConfigRepository {
@@ -99,6 +101,16 @@ public final class ConfigRepository {
         InMemoryCapabilityRegistry registry = new InMemoryCapabilityRegistry();
         for (Path file : jsonFilesIn("capabilities")) {
             registry.register(capability(parse(file), file));
+        }
+        return registry;
+    }
+
+    /** Schemas, keyed by file name: {@code schemas/venue-request.json} is {@code venue-request}. */
+    public InMemorySchemaRegistry schemaRegistry() {
+        InMemorySchemaRegistry registry = new InMemorySchemaRegistry();
+        for (Path file : jsonFilesIn("schemas")) {
+            String name = file.getFileName().toString();
+            registry.register(name.substring(0, name.length() - ".json".length()), parse(file));
         }
         return registry;
     }

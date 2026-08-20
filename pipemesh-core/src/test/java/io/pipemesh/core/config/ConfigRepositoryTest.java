@@ -83,8 +83,10 @@ class ConfigRepositoryTest {
     @Test
     void compilesEveryWorkflowWithoutACodeChange() {
         StepExecutors executors = StepExecutors.of(
-                new LlmStepExecutor(config.modelRegistry(
-                        List.of(new StubProviderFactory("openai-compatible"))), config.promptRegistry()),
+                new LlmStepExecutor(
+                        config.modelRegistry(List.of(new StubProviderFactory("openai-compatible"))),
+                        config.promptRegistry(),
+                        config.schemaRegistry()),
                 new ConditionStepExecutor(),
                 new CapabilityStepExecutor(config.capabilityRegistry(), List.of()),
                 new ApprovalStepExecutor(new InMemoryApprovalStore()),
@@ -149,6 +151,22 @@ class ConfigRepositoryTest {
 
         assertTrue(prompts.find(PromptId.of("venue_booking.extraction.v1")).isPresent());
         assertTrue(prompts.find(PromptId.of("venue_booking.refund.v1")).isPresent());
+    }
+
+    @Test
+    void readsSchemasByFileName() {
+        assertTrue(config.schemaRegistry().find("venue-request").isPresent());
+    }
+
+    @Test
+    void wiresTheExampleWorkflowToItsSchemaById() {
+        var schema = config.schemaRegistry().find("venue-request").orElseThrow();
+
+        assertEquals("object", schema.path("type").asText());
+        assertTrue(config.workflows().stream()
+                .flatMap(workflow -> workflow.steps().stream())
+                .anyMatch(step -> step.config().path("outputSchema").asText().equals("venue-request")),
+                "the example should name its schema rather than inline it");
     }
 
     @Test

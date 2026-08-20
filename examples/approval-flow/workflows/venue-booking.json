@@ -9,6 +9,7 @@
       "type": "llm",
       "model": "fast",
       "prompt": "venue_booking.extraction.v1",
+      "outputSchema": "venue-request",
       "output": "request",
       "next": "validate"
     },
