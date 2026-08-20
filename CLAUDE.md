@@ -111,6 +111,11 @@ passes the tests — say so rather than accepting it.
 - **No external call inside an open transaction.** LLM calls, MCP invocations and any provider I/O
   happen outside transaction boundaries. `core/` has no Spring, so there is no `@Transactional` to
   lean on — the boundaries are explicit and easy to break. Check this whenever provider code moves.
+- **A retry is a policy, never a graph edge.** A step that loops back to itself to try again has
+  put an operational concern where nobody can change it without editing the workflow.
+- **Never retry what may already have happened.** A capability declares `idempotent: false` and the
+  runtime refuses to repeat it, because a transport failure leaves it unknown whether the call
+  landed.
 - **Long waits never hold a thread.** An execution waiting for approval is persisted and its
   resources released; it resumes on an external signal (§16).
 - **Resume is idempotent.** The same approval decision delivered twice must not advance the

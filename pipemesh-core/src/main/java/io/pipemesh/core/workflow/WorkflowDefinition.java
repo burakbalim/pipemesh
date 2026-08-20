@@ -1,6 +1,8 @@
 package io.pipemesh.core.workflow;
 
 import java.util.Collections;
+import io.pipemesh.core.policy.StepPolicy;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +17,12 @@ public record WorkflowDefinition(
         WorkflowId id,
         WorkflowVersion version,
         StepId entry,
-        List<Step> steps) {
+        List<Step> steps,
+        StepPolicy defaults) {
+
+    public WorkflowDefinition(WorkflowId id, WorkflowVersion version, StepId entry, List<Step> steps) {
+        this(id, version, entry, steps, StepPolicy.DEFAULT);
+    }
 
     public WorkflowDefinition {
         Objects.requireNonNull(id, "workflow id");
@@ -26,6 +33,7 @@ public record WorkflowDefinition(
             throw new IllegalArgumentException("workflow " + id + " has no steps");
         }
         steps = List.copyOf(steps);
+        defaults = defaults == null ? StepPolicy.DEFAULT : defaults;
     }
 
     public Optional<Step> step(StepId stepId) {

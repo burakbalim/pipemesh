@@ -1,5 +1,7 @@
 package io.pipemesh.core.workflow;
 
+import io.pipemesh.core.policy.StepPolicy;
+
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -14,13 +16,15 @@ public record ExecutionGraph(
         WorkflowId workflowId,
         WorkflowVersion version,
         StepId entry,
-        Map<StepId, Step> steps) {
+        Map<StepId, Step> steps,
+        StepPolicy defaults) {
 
     public ExecutionGraph {
         Objects.requireNonNull(workflowId, "workflow id");
         Objects.requireNonNull(version, "version");
         Objects.requireNonNull(entry, "entry");
         steps = Map.copyOf(steps);
+        defaults = defaults == null ? StepPolicy.DEFAULT : defaults;
     }
 
     public Step stepAt(StepId id) {

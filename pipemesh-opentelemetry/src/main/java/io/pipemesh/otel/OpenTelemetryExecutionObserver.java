@@ -55,6 +55,7 @@ public final class OpenTelemetryExecutionObserver implements ExecutionObserver {
     private final DoubleHistogram executionDuration;
     private final DoubleHistogram stepDuration;
     private final DoubleHistogram approvalWait;
+    private final LongCounter attempts;
     private final LongCounter inputTokens;
     private final LongCounter outputTokens;
 
@@ -77,6 +78,9 @@ public final class OpenTelemetryExecutionObserver implements ExecutionObserver {
         this.approvalWait = meter.histogramBuilder("pipemesh.approval.wait_time")
                 .setDescription("How long an execution sat waiting before a decision arrived")
                 .setUnit("ms")
+                .build();
+        this.attempts = meter.counterBuilder("pipemesh.step.attempts")
+                .setDescription("Step attempts, by outcome — a retry that worked is not a success first time")
                 .build();
         this.inputTokens = meter.counterBuilder("pipemesh.llm.input_tokens")
                 .setDescription("Prompt tokens spent")
@@ -106,6 +110,7 @@ public final class OpenTelemetryExecutionObserver implements ExecutionObserver {
         span.end(Instant.ofEpochMilli(endedAt));
 
         stepDuration.record(event.latencyMillis(), attributes);
+        attempts.add(1, attributes);
         countTokens(event, attributes);
     }
 

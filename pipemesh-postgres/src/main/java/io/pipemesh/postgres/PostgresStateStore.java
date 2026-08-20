@@ -116,7 +116,7 @@ public final class PostgresStateStore implements StateStore {
         String sql = """
                 SELECT execution_id, step_id, step_type, outcome, input_snapshot, output_snapshot,
                        model_id, prompt_version, input_tokens, output_tokens, latency_ms,
-                       started_at, finished_at, attributes
+                       started_at, finished_at, attributes, attempt
                   FROM workflow_step_history
                  WHERE execution_id = ?
                  ORDER BY id
@@ -160,8 +160,8 @@ public final class PostgresStateStore implements StateStore {
                 INSERT INTO workflow_step_history
                     (execution_id, step_id, step_type, outcome, input_snapshot, output_snapshot,
                      model_id, prompt_version, input_tokens, output_tokens, latency_ms,
-                     started_at, finished_at, attributes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     started_at, finished_at, attributes, attempt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, step.executionId().value());
@@ -178,6 +178,7 @@ public final class PostgresStateStore implements StateStore {
             statement.setTimestamp(12, new Timestamp(step.startedAtEpochMillis()));
             statement.setTimestamp(13, new Timestamp(step.finishedAtEpochMillis()));
             statement.setObject(14, JsonColumn.toJsonb(step.attributes()));
+            statement.setInt(15, step.attempt());
             statement.executeUpdate();
         }
     }
@@ -213,7 +214,8 @@ public final class PostgresStateStore implements StateStore {
                 rows.getLong("latency_ms"),
                 rows.getTimestamp("started_at").getTime(),
                 rows.getTimestamp("finished_at").getTime(),
-                JsonColumn.readObject(rows.getString("attributes")));
+                JsonColumn.readObject(rows.getString("attributes")),
+                rows.getInt("attempt"));
     }
 
     private String stepValue(StepId stepId) {

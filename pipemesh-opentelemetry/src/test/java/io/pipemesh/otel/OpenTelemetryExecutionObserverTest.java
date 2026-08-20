@@ -191,6 +191,13 @@ class OpenTelemetryExecutionObserverTest {
     }
 
     @Test
+    void countsStepAttempts() {
+        approve(startExpensive(OrganizationId.DEFAULT));
+
+        assertEquals(1, metricNamed("pipemesh.step.attempts").size());
+    }
+
+    @Test
     void publishesNothingForAnExecutionThatHasNotFinished() {
         startExpensive(OrganizationId.DEFAULT);
 

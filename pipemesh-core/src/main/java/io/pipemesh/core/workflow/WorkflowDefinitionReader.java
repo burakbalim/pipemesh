@@ -2,6 +2,7 @@ package io.pipemesh.core.workflow;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.pipemesh.core.policy.StepPolicy;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -61,7 +62,8 @@ public final class WorkflowDefinitionReader {
                 WorkflowId.of(required(root, ID)),
                 WorkflowVersion.of(required(root, VERSION)),
                 StepId.of(required(root, ENTRY)),
-                steps(root));
+                steps(root),
+                StepPolicy.from(root));
     }
 
     private List<Step> steps(JsonNode root) {

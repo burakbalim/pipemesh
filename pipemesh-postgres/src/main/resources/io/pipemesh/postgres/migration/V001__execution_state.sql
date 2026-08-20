@@ -39,6 +39,7 @@ CREATE TABLE workflow_step_history (
     input_tokens      BIGINT      NOT NULL DEFAULT 0,
     output_tokens     BIGINT      NOT NULL DEFAULT 0,
     latency_ms        BIGINT      NOT NULL DEFAULT 0,
+    attempt           INT         NOT NULL DEFAULT 1,
     -- Whatever the step reported about itself. Typed columns above are the
     -- handful worth indexing; this keeps the rest without inventing a column
     -- every time a new step type has something to say.

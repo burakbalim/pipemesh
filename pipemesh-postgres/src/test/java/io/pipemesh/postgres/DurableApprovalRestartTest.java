@@ -276,7 +276,7 @@ class DurableApprovalRestartTest {
             process.stateStore().advance(stale, new StepRecord(
                     stale.executionId(), StepId.of("approval"),
                     io.pipemesh.core.workflow.StepType.HUMAN_APPROVAL,
-                    StepRecord.StepOutcome.SUCCESS, null, null, "", "", 0, 0, 0, 1, 1, null));
+                    StepRecord.StepOutcome.SUCCESS, null, null, "", "", 0, 0, 0, 1, 1, null, 1));
             rejected = false;
         } catch (io.pipemesh.core.state.StaleExecutionException expected) {
             rejected = true;

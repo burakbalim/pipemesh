@@ -38,6 +38,17 @@ public record CapabilityDescriptor(
         execution = execution.deepCopy();
     }
 
+    /**
+     * Whether invoking this capability twice is safe.
+     *
+     * <p>Defaults to true, because most capabilities read. A capability with an
+     * effect — taking a payment, sending a message — must say so, and the runtime
+     * will then never retry it on a failure whose outcome is unknown.
+     */
+    public boolean idempotent() {
+        return execution.path("idempotent").asBoolean(true);
+    }
+
     /** The provider type this capability is reached through, e.g. {@code mcp}, {@code grpc}. */
     public String executionType() {
         return execution.path("type").asText("");

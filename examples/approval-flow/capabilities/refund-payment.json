@@ -8,6 +8,7 @@
 
   "execution": {
     "type": "grpc",
-    "target": "billing-service"
+    "target": "billing-service",
+    "idempotent": false
   }
 }

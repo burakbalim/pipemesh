@@ -2,6 +2,7 @@ package io.pipemesh.core.workflow;
 
 import io.pipemesh.core.execution.StepExecutor;
 import io.pipemesh.core.execution.StepExecutors;
+import io.pipemesh.core.policy.StepPolicy;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -35,13 +36,14 @@ public final class WorkflowCompiler {
             problems.add("entry step '" + definition.entry() + "' does not exist");
         }
         problems.addAll(unknownStepTypes(steps));
-        problems.addAll(danglingEdges(steps));
-        problems.addAll(unreachableSteps(definition.entry(), steps));
+        problems.addAll(danglingEdges(steps, definition.defaults()));
+        problems.addAll(unreachableSteps(definition.entry(), steps, definition.defaults()));
 
         if (!problems.isEmpty()) {
             throw new WorkflowCompilationException(definition.id(), problems);
         }
-        return new ExecutionGraph(definition.id(), definition.version(), definition.entry(), steps);
+        return new ExecutionGraph(
+                definition.id(), definition.version(), definition.entry(), steps, definition.defaults());
     }
 
     private Map<StepId, Step> collectSteps(WorkflowDefinition definition, List<String> problems) {
@@ -60,10 +62,10 @@ public final class WorkflowCompiler {
                 .toList();
     }
 
-    private List<String> danglingEdges(Map<StepId, Step> steps) {
+    private List<String> danglingEdges(Map<StepId, Step> steps, StepPolicy defaults) {
         List<String> problems = new ArrayList<>();
         for (Step step : steps.values()) {
-            for (StepId target : outgoing(step)) {
+            for (StepId target : outgoing(step, defaults)) {
                 if (!steps.containsKey(target)) {
                     problems.add("step '" + step.id() + "' points at missing step '" + target + "'");
                 }
@@ -72,18 +74,18 @@ public final class WorkflowCompiler {
         return problems;
     }
 
-    private List<String> unreachableSteps(StepId entry, Map<StepId, Step> steps) {
+    private List<String> unreachableSteps(StepId entry, Map<StepId, Step> steps, StepPolicy defaults) {
         if (!steps.containsKey(entry)) {
             return List.of();
         }
-        Set<StepId> reached = reachableFrom(entry, steps);
+        Set<StepId> reached = reachableFrom(entry, steps, defaults);
         return steps.keySet().stream()
                 .filter(id -> !reached.contains(id))
                 .map(id -> "step '" + id + "' is unreachable")
                 .toList();
     }
 
-    private Set<StepId> reachableFrom(StepId entry, Map<StepId, Step> steps) {
+    private Set<StepId> reachableFrom(StepId entry, Map<StepId, Step> steps, StepPolicy defaults) {
         Set<StepId> reached = new LinkedHashSet<>();
         List<StepId> pending = new ArrayList<>(List.of(entry));
         while (!pending.isEmpty()) {
@@ -93,18 +95,25 @@ public final class WorkflowCompiler {
             }
             Step step = steps.get(current);
             if (step != null) {
-                pending.addAll(outgoing(step));
+                pending.addAll(outgoing(step, defaults));
             }
         }
         return reached;
     }
 
-    private Set<StepId> outgoing(Step step) {
-        Optional<StepExecutor> executor = executorFor(step);
-        if (executor.isEmpty()) {
-            return Set.of();
-        }
-        return new LinkedHashSet<>(executor.get().outgoing(step));
+    /**
+     * Every step this one can hand control to: the edges its executor declares,
+     * plus the one a failure policy can branch to.
+     *
+     * <p>A {@code goto} target is an edge like any other. Leaving it out would
+     * make the step it names look unreachable, and would let a typo in it survive
+     * until the day something actually failed.
+     */
+    private Set<StepId> outgoing(Step step, StepPolicy defaults) {
+        Set<StepId> targets = new LinkedHashSet<>();
+        executorFor(step).ifPresent(executor -> targets.addAll(executor.outgoing(step)));
+        StepPolicy.resolve(step, defaults).onFailure().targetIfAny().ifPresent(targets::add);
+        return targets;
     }
 
     private Optional<StepExecutor> executorFor(Step step) {

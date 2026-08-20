@@ -78,7 +78,7 @@ public final class CapabilityStepExecutor implements StepExecutor {
         }
 
         CapabilityResult result = provider.invoke(descriptor, inputFor(config, context));
-        return switch (result) {
+        return switch (retryableOnly(descriptor, result)) {
             case CapabilityResult.Success success -> new StepResult.Continue(
                     StepId.of(required(config, NEXT)),
                     Map.of(required(config, OUTPUT), success.output()),
@@ -91,6 +91,22 @@ public final class CapabilityStepExecutor implements StepExecutor {
     @Override
     public List<StepId> outgoing(Step step) {
         return Stepwiring.stepIds(step, NEXT);
+    }
+
+    /**
+     * Strips the retryable flag from a capability that declared itself
+     * non-idempotent.
+     *
+     * <p>A transport failure leaves one question unanswered — did the call
+     * arrive? — and for a capability that charges a card, retrying on that
+     * uncertainty is how a customer gets billed twice. The registration is the
+     * only place that knows, so this is where the retry is refused (§17).
+     */
+    private CapabilityResult retryableOnly(CapabilityDescriptor descriptor, CapabilityResult result) {
+        if (!(result instanceof CapabilityResult.Failure failure) || descriptor.idempotent()) {
+            return result;
+        }
+        return new CapabilityResult.Failure(failure.code(), failure.message(), false);
     }
 
     /** An absent {@code input} means the capability takes the whole context. */
