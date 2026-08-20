@@ -1,0 +1,14 @@
+{
+  "id": "calculate_capacity",
+  "description": "Work out how many people the booking should be sized for",
+  "kind": "application",
+  "owner": "events-team",
+  "version": "1.0",
+  "permissions": ["events.plan"],
+
+  "execution": {
+    "type": "worker",
+    "capability": "calculate_capacity",
+    "idempotent": true
+  }
+}

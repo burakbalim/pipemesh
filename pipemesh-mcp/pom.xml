@@ -40,4 +40,26 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <!--
+                The test MCP server is shared: proving that a workflow cannot tell an
+                MCP tool from a worker needs a real MCP server in the gRPC module's
+                tests, and copying it there would leave two of them to drift apart.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>

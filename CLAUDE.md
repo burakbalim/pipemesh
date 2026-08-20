@@ -85,6 +85,8 @@ passes the tests — say so rather than accepting it.
 - **A workflow never learns how a capability is implemented.** MCP, REST, gRPC, an in-process
   function, an external worker — all of it is registration metadata. The workflow says
   `{"type": "capability", "capability": "..."}` and nothing more (§9.8, §10).
+  `MixedCapabilityWorkflowTest` holds this: one workflow, an MCP tool and someone's own code, two
+  steps written the same way.
 - **`task` is not a workflow step type.** It may exist as an internal runtime concept — an execution
   unit the engine schedules — but it must not appear in the workflow DSL (§9.8).
 - **Ownership, version, deployment mechanism and permissions belong to the capability registration**,

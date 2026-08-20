@@ -26,6 +26,14 @@
       "capability": "venue_search",
       "input": "$.request.location",
       "output": "venues",
+      "next": "size_it"
+    },
+    {
+      "id": "size_it",
+      "type": "capability",
+      "capability": "calculate_capacity",
+      "input": "$.request",
+      "output": "capacity",
       "next": "approval"
     },
     {

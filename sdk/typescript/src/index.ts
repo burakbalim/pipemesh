@@ -9,3 +9,5 @@ export {
   isTerminal,
   isWaiting,
 } from "./client";
+
+export { CapabilityFailure, CapabilityFunction, PipeMeshWorker } from "./worker";

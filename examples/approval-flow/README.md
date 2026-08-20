@@ -31,5 +31,7 @@ var capabilities = config.capabilityRegistry();
 `fast` points at a local Ollama, so nothing here needs an API key. `reasoning` names
 `OPENAI_API_KEY` — the variable, never the key: config files get committed, credentials should not.
 
-`venue_search` is registered as an MCP tool. Pointing it at a REST endpoint instead is an edit to
-`capabilities/venue-search.json` and nothing else.
+`venue_search` is an MCP tool and `calculate_capacity` is a function inside somebody's own
+application, reached through a worker. Read the two steps in `venue-booking.json`: they are the same
+sentence. Which one crosses a process boundary, and how, lives in `capabilities/` — pointing either
+at a REST endpoint instead is an edit to one registration and nothing else.

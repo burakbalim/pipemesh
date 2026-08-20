@@ -197,6 +197,45 @@ grpc/              CapabilityWorkerService, WorkerRegistry, ConnectedWorker,
 canlandırıyordum. Gerçek bir worker ölümü stream'i kapatır — test artık worker'ın invocation'ı alıp
 hattı kapatmasıyla çalışıyor, yani `onCompleted → unregister → abandon` yolunun tamamı sınanıyor.
 
-### Sıradaki — Aşama 3
+### Aşama 3-5 — SDK worker'ları ve karışık workflow (2026-08-20) ✅
 
-Python worker SDK'sı ve ayrı process testi.
+**218 Java + 17 Python + 17 TypeScript testi yeşil.** Contract tamamlandı.
+
+```
+sdk/python/pipemesh/worker.py      PipeMeshWorker, CapabilityFailure
+sdk/typescript/src/worker.ts       aynı sözleşme; structs.ts paylaşıldı
+examples/                          calculate-capacity.json (worker) + venue-booking'e ek adım
+pipemesh-grpc/  (test)             MixedCapabilityWorkflowTest
+```
+
+**Tasarım kararları:**
+
+- **Tek kuyruk, tek yazar.** Python'da giden mesajlar bir `queue`'dan tek bir istek iterator'ına
+  akıyor; aynı anda cevaplayan birkaç invocation stream'i bozamıyor. Java tarafındaki
+  senkronizasyonun ve `UpdatePump`'ın aynı kuralı, üçüncü kez.
+- **Invocation'lar okuma thread'inin dışında koşuyor.** Yavaş bir capability, worker'ın diğer
+  çağrıları almasını durdurmamalı.
+- **Beklenmeyen exception da bir cevaptır.** Kullanıcının planlamadığı bir hata yakalanıp
+  `worker.raised` olarak dönüyor. Kaçmasına izin vermek, execution'ı hiç gelmeyecek bir cevabı
+  beklerken bırakırdı — ve bu, hata gibi görünmeyen bir hang'dir. İki dilde de bir test bunu
+  kilitliyor.
+- **`CapabilityFailure` varsayılan olarak `retryable: false`.** Hayır diyen bir iş kuralı, ikinci
+  kez sorulduğunda farklı bir şey söylemiyor. Taşıma sorunu ayrı bir şey ve runtime onu kendisi
+  sınıflandırıyor.
+- **Bare değer isimli alana sarmalanıyor** (`{"value": ...}`): Struct'ın alan adı olmadan şekli yok.
+
+### Kabul kriterinin kalbi
+
+`MixedCapabilityWorkflowTest`: tek workflow, iki capability — biri ayrı process'te çalışan gerçek
+bir MCP sunucusu, diğeri gRPC'den bağlanmış bir worker. İki adım **aynı cümle**, ve workflow
+metninde ne "mcp" ne "worker" geçiyor. Test ikisinin çıktısını da doğruluyor.
+
+`examples/approval-flow` da aynı şeyi gösteriyor: `venue_search` bir MCP tool'u,
+`calculate_capacity` birinin uygulamasındaki bir fonksiyon; `venue-booking.json`'da ikisi
+birbirinden ayırt edilemiyor.
+
+**Paylaşılan test sunucusu:** `TestMcpServer` artık `pipemesh-mcp` test-jar'ı olarak yayınlanıyor.
+Kopyalamak iki tanesinin birbirinden ayrı düşmesi demekti.
+
+**Yapılmayan:** yük dağıtımı (round-robin var, yük farkındalığı #10), worker sağlık kontrolü,
+worker'ın runtime'a olay göndermesi.
