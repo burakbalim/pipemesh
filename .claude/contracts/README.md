@@ -14,7 +14,7 @@ onunla çelişmez.
 | 1 | [walking-skeleton.md](walking-skeleton.md) | §7, §8, §9.1–9.4, §10, §12–16, §22, §25–28 | **Tamam** (2026-08-20) |
 | 2 | [reliability-policies.md](reliability-policies.md) | §17 Retry, §18 Failure handling, timeout, fallback model | **Tamam** (2026-08-20) |
 | 3 | [structured-output.md](structured-output.md) | §21 Structured output, §11 prompt registry, §24 versiyonlama | **Tamam** (2026-08-20) |
-| 4 | _streaming_ | §30 Streaming, provider sınırında token akışı | Planlanan |
+| 4 | [streaming.md](streaming.md) | §30 Streaming, provider sınırında token akışı | **Tamam** (2026-08-20) |
 | 5 | _intent-resolution_ | §19 Intent resolution, §20 deterministic vs AI karar sınırı | Planlanan |
 | 6 | _parallel-and-transform_ | §9.5 Parallel, §9.6 Transform, §29 Concurrency/join | Planlanan |
 | 7 | _event-driven-wait_ | §9.7 Wait, §28 event-driven yürütme | Planlanan |

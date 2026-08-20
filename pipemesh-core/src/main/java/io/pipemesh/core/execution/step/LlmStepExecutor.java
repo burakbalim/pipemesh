@@ -6,6 +6,9 @@ import io.pipemesh.core.execution.ExecutionContext;
 import io.pipemesh.core.execution.StepAttributes;
 import io.pipemesh.core.execution.StepExecutor;
 import io.pipemesh.core.execution.StepResult;
+import io.pipemesh.core.observability.CompositeExecutionObserver;
+import io.pipemesh.core.observability.ExecutionObserver;
+import io.pipemesh.core.observability.TokenEvent;
 import io.pipemesh.core.model.CompletionRequest;
 import io.pipemesh.core.model.CompletionResponse;
 import io.pipemesh.core.model.MessagingProvider;
@@ -48,20 +51,37 @@ public final class LlmStepExecutor implements StepExecutor {
     private static final String OUTPUT = "output";
     private static final String NEXT = "next";
     private static final String OUTPUT_SCHEMA = "outputSchema";
+    private static final String STREAM = "stream";
 
     private final ModelRegistry models;
     private final PromptRegistry prompts;
     private final SchemaRegistry schemas;
+    private final ExecutionObserver observer;
     private final JsonSchemaValidator validator = new JsonSchemaValidator();
 
     public LlmStepExecutor(ModelRegistry models, PromptRegistry prompts) {
-        this(models, prompts, schemaId -> Optional.empty());
+        this(models, prompts, schemaId -> Optional.empty(), ExecutionObserver.NONE);
     }
 
     public LlmStepExecutor(ModelRegistry models, PromptRegistry prompts, SchemaRegistry schemas) {
+        this(models, prompts, schemas, ExecutionObserver.NONE);
+    }
+
+    /**
+     * @param observer where tokens go while the step is still running. The engine
+     *                 has its own reference to the same observer for execution
+     *                 events; this one exists because tokens are produced inside
+     *                 the step, before there is any result to report.
+     */
+    public LlmStepExecutor(
+            ModelRegistry models, PromptRegistry prompts, SchemaRegistry schemas,
+            ExecutionObserver observer) {
+
         this.models = Objects.requireNonNull(models, "model registry");
         this.prompts = Objects.requireNonNull(prompts, "prompt registry");
         this.schemas = Objects.requireNonNull(schemas, "schema registry");
+        this.observer = CompositeExecutionObserver.guarded(
+                Objects.requireNonNull(observer, "observer"));
     }
 
     @Override
@@ -100,7 +120,7 @@ public final class LlmStepExecutor implements StepExecutor {
                 promptId.version(),
                 schema);
 
-        CompletionResponse response = provider.get().complete(request);
+        CompletionResponse response = answer(step, provider.get(), request, context);
         Map<String, JsonNode> attributes = attributesOf(model, promptId, response);
 
         List<SchemaViolation> violations = schema == null
@@ -119,6 +139,27 @@ public final class LlmStepExecutor implements StepExecutor {
                 StepId.of(required(config, NEXT)),
                 Map.of(required(config, OUTPUT), response.content()),
                 attributes);
+    }
+
+    /**
+     * Streams when the step asked for it, and calls straight through otherwise.
+     *
+     * <p>Either way the step ends with a complete answer, so everything after this
+     * point — schema validation, the variable it writes — is unchanged by the
+     * choice. Streaming is how the answer arrives, not what it is.
+     */
+    private CompletionResponse answer(
+            Step step, MessagingProvider provider, CompletionRequest request, ExecutionContext context) {
+
+        if (!step.config().path(STREAM).asBoolean(false)) {
+            return provider.complete(request);
+        }
+        return provider.stream(request, chunk -> observer.tokenProduced(new TokenEvent(
+                context.executionId(),
+                context.organization(),
+                step.id(),
+                chunk.text(),
+                chunk.index())));
     }
 
     /**

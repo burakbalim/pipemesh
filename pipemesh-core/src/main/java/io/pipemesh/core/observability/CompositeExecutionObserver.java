@@ -67,6 +67,11 @@ public final class CompositeExecutionObserver implements ExecutionObserver {
         each(observer -> observer.executionFinished(event));
     }
 
+    @Override
+    public void tokenProduced(TokenEvent event) {
+        each(observer -> observer.tokenProduced(event));
+    }
+
     private void each(Consumer<ExecutionObserver> notification) {
         for (ExecutionObserver observer : observers) {
             try {

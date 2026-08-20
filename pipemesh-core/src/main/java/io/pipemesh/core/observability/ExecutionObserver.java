@@ -35,4 +35,13 @@ public interface ExecutionObserver {
 
     default void executionFinished(ExecutionEvent event) {
     }
+
+    /**
+     * A piece of a model's answer, while the step producing it is still running.
+     *
+     * <p>Data rather than telemetry: an exporter should leave this alone, and a
+     * consumer that wants to show an answer as it appears implements just this.
+     */
+    default void tokenProduced(TokenEvent event) {
+    }
 }

@@ -792,11 +792,19 @@ interface MessagingProvider {
         CompletionRequest request
     );
 
-    Stream<CompletionChunk> stream(
-        CompletionRequest request
+    CompletionResponse stream(
+        CompletionRequest request,
+        Consumer<CompletionChunk> onChunk
     );
 }
 ```
+
+Streaming takes a callback rather than returning a `Stream`. A lazily consumed
+stream ties an open connection to whenever the caller gets round to draining it,
+and makes a step's synchronous contract someone else's problem; a callback keeps
+the connection's lifetime inside the provider. The default implementation
+degrades to a single chunk, so a provider that cannot stream still works
+everywhere streaming is asked for.
 
 Providers:
 
@@ -1775,6 +1783,15 @@ Application Stream
 ```
 
 The runtime should not force applications into request/response semantics.
+
+Tokens reach a caller through the same channel as execution events. The wire
+protocol already merges them into one stream (§26.4), so a single in-process
+channel means the gRPC adapter is one more observer rather than a second fan-out
+mechanism. An observer that has no interest in tokens ignores them by default.
+
+Streaming changes how an answer arrives, never what it is: the step still ends
+with a complete response, still validates it against its schema (§21), and still
+writes one variable. A workflow reads the same either way.
 
 ---
 

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.pipemesh.core.model.CompletionChunk;
 import io.pipemesh.core.model.CompletionRequest;
 import io.pipemesh.core.model.CompletionResponse;
 import io.pipemesh.core.model.MessagingProvider;
@@ -17,6 +18,8 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * Speaks the OpenAI chat-completions protocol over plain HTTP.
@@ -76,6 +79,89 @@ public final class OpenAiCompatibleProvider implements MessagingProvider {
                 System.currentTimeMillis() - startedAt);
     }
 
+    @Override
+    public CompletionResponse stream(CompletionRequest request, Consumer<CompletionChunk> onChunk) {
+        long startedAt = System.currentTimeMillis();
+
+        ObjectNode body = body(request);
+        body.put("stream", true);
+        // Without this the usage block never arrives and token counts silently
+        // read zero — a cost metric that is quietly wrong is worse than one that
+        // is loudly missing.
+        body.putObject("stream_options").put("include_usage", true);
+
+        StringBuilder answer = new StringBuilder();
+        long[] tokens = new long[2];
+        int[] index = {0};
+
+        HttpResponse<Stream<String>> response = sendForLines(body);
+        if (response.statusCode() / 100 != 2) {
+            throw new ModelCallException("model endpoint answered " + response.statusCode());
+        }
+
+        try (Stream<String> lines = response.body()) {
+            lines.forEach(line -> consume(line, answer, tokens, index, onChunk));
+        }
+
+        return new CompletionResponse(
+                contentOf(answer.toString(), request),
+                config.model(),
+                tokens[0],
+                tokens[1],
+                System.currentTimeMillis() - startedAt);
+    }
+
+    /**
+     * Reads one server-sent line.
+     *
+     * <p>The wire carries blank lines as keep-alives, a {@code [DONE]} sentinel
+     * that is not JSON, and — with {@code include_usage} — a final frame whose
+     * choices are empty and whose usage is the whole point. Treating any of those
+     * as an answer chunk is how a stream ends up with a stray token or no cost.
+     */
+    private void consume(
+            String line, StringBuilder answer, long[] tokens, int[] index,
+            Consumer<CompletionChunk> onChunk) {
+
+        if (!line.startsWith("data:")) {
+            return;
+        }
+        String payload = line.substring("data:".length()).trim();
+        if (payload.isEmpty() || "[DONE]".equals(payload)) {
+            return;
+        }
+
+        JsonNode frame;
+        try {
+            frame = JSON.readTree(payload);
+        } catch (Exception notJson) {
+            return;
+        }
+
+        JsonNode usage = frame.path("usage");
+        if (usage.isObject()) {
+            tokens[0] = usage.path("prompt_tokens").asLong(tokens[0]);
+            tokens[1] = usage.path("completion_tokens").asLong(tokens[1]);
+        }
+
+        String text = frame.path("choices").path(0).path("delta").path("content").asText("");
+        if (!text.isEmpty()) {
+            answer.append(text);
+            onChunk.accept(new CompletionChunk(text, index[0]++));
+        }
+    }
+
+    private HttpResponse<Stream<String>> sendForLines(ObjectNode body) {
+        try {
+            return http.send(requestFor(body).build(), HttpResponse.BodyHandlers.ofLines());
+        } catch (IOException unreachable) {
+            throw new ModelCallException("could not reach " + config.completionsUrl(), unreachable);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new ModelCallException("interrupted while streaming from the model", interrupted);
+        }
+    }
+
     private ObjectNode body(CompletionRequest request) {
         ObjectNode body = JSON.createObjectNode();
         body.put("model", config.model());
@@ -102,7 +188,7 @@ public final class OpenAiCompatibleProvider implements MessagingProvider {
         jsonSchema.set("schema", schema);
     }
 
-    private HttpResponse<String> send(ObjectNode body) {
+    private HttpRequest.Builder requestFor(ObjectNode body) {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(config.completionsUrl()))
                 .timeout(config.timeout())
@@ -110,9 +196,12 @@ public final class OpenAiCompatibleProvider implements MessagingProvider {
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8));
 
         config.apiKeyIfAny().ifPresent(key -> builder.header("Authorization", "Bearer " + key));
+        return builder;
+    }
 
+    private HttpResponse<String> send(ObjectNode body) {
         try {
-            return http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+            return http.send(requestFor(body).build(), HttpResponse.BodyHandlers.ofString());
         } catch (IOException unreachable) {
             throw new ModelCallException("could not reach " + config.completionsUrl(), unreachable);
         } catch (InterruptedException interrupted) {
@@ -129,7 +218,11 @@ public final class OpenAiCompatibleProvider implements MessagingProvider {
      * losing the answer would be worse than handing back what arrived.
      */
     private JsonNode content(JsonNode answer, CompletionRequest request) {
-        String text = answer.path("choices").path(0).path("message").path("content").asText("");
+        return contentOf(
+                answer.path("choices").path(0).path("message").path("content").asText(""), request);
+    }
+
+    private JsonNode contentOf(String text, CompletionRequest request) {
         if (request.outputSchemaIfAny().isEmpty()) {
             return TextNode.valueOf(text);
         }
