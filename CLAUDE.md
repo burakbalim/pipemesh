@@ -9,9 +9,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Workflows are versioned JSON artifacts. The runtime compiles them into an execution graph and runs
 them through pluggable providers, with durable state so an execution survives process restarts.
 
-**Current status: the first slice is complete.** A workflow described in a configuration directory
-runs end to end — model, condition, capability over MCP, human approval — survives a restart, and
-reports itself to any OTLP backend. `.claude/contracts/README.md` lists what comes next.
+**Current status:** a workflow described in a configuration directory runs end to end — model,
+condition, capability over MCP, human approval — survives a restart or a crashed process, reports
+itself to any OTLP backend, and is reachable over gRPC from any language.
+`.claude/contracts/README.md` lists what comes next.
 
 ```
 DESIGN.md                      # full technical architecture (47 sections)
@@ -70,7 +71,7 @@ one to `core/` should feel like a decision, not a convenience.
 | MCP | `io.modelcontextprotocol.sdk:mcp-core` in `pipemesh-mcp`, stdio transport |
 | Observability | `opentelemetry-api` in `pipemesh-opentelemetry` — api only; the application picks the exporter |
 | Expressions | narrow in-house evaluator — JSONPath reads + fixed comparison grammar |
-| Client boundary | gRPC (`proto/pipemesh.proto`) — designed now, implemented in a later contract |
+| Client boundary | gRPC in `pipemesh-grpc`, generated from `proto/pipemesh.proto` (single source of truth) |
 | SDKs | Python, TypeScript, Java — generated from the proto (later contract) |
 
 Spring integration, when it arrives, lives in a separate `spring/` module. It never becomes a

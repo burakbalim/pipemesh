@@ -23,7 +23,7 @@ onunla çelişmez.
 | 10a | [orphan-recovery.md](orphan-recovery.md) | §15, §38 — `RUNNING`'de takılı execution'ları toplama | **Tamam** (2026-08-20) |
 | 10 | _distributed-workers_ | §28 Queue + worker dağıtımı, §38 reliability | Planlanan |
 | 11 | _cost-and-evaluation_ | §39 cost tracking, evaluation, model routing | Planlanan |
-| 12 | _grpc-boundary_ | §26.1 gRPC servisi, `pipemesh.proto`, capability worker stream'i | Planlanan |
+| 12 | [grpc-boundary.md](grpc-boundary.md) | §26.1 gRPC servisi (`CapabilityWorker` hariç → #14) | **Tamam** (2026-08-20) |
 | 13 | _sdks_ | Python / TypeScript / Java SDK'ları — proto'dan üretilir | Planlanan |
 | 14 | _application-capabilities_ | `kind: application` capability'leri, SDK worker'ları, business code sınırı | Planlanan |
 | 15 | _langchain-adapter_ | §35 opsiyonel LangChain provider'ı (`pipemesh-langchain`) | Planlanan |

@@ -82,7 +82,7 @@ The runtime is implemented in **Java 21**; the workflows it runs are not tied to
 |---|---|
 | Core runtime | Java 21, framework-free (no Spring dependency in `core/`) |
 | Build | Maven, multi-module |
-| Client boundary | gRPC — `pipemesh.proto` is the authoritative API contract |
+| Client boundary | gRPC in `pipemesh-grpc`, generated from `proto/pipemesh.proto` |
 | SDKs | Python, TypeScript, Java — generated from the same proto |
 | Spring integration | `pipemesh-spring-boot-starter` (optional, separate module) |
 | Workflow definitions | JSON — authored and versioned independently of all of the above |
@@ -175,6 +175,7 @@ observability/  # tracing, metrics, logging                           (Java)
 opentelemetry/  # spans and metrics for any OTLP backend              (Java)
 spring/         # optional Spring Boot starter                        (Java)
 proto/          # pipemesh.proto — the API contract                   (language-neutral)
+grpc/           # the service, generated from the proto                (Java)
 sdk/python/     # client SDK + capability worker                           (Python)
 sdk/typescript/ # client SDK + capability worker                           (TypeScript)
 sdk/java/       # remote client (embedding the library is the alternative)
