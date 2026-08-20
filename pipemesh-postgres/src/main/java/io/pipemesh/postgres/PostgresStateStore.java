@@ -112,6 +112,35 @@ public final class PostgresStateStore implements StateStore {
                 () -> new StateStoreException("execution vanished after update", null));
     }
 
+    @Override
+    public List<ExecutionRecord> findStale(ExecutionStatus status, long untouchedSince, int limit) {
+        String sql = """
+                SELECT execution_id, organization_id, workflow_id, workflow_version, status,
+                       current_step, variables, trace_context, version, created_at, updated_at
+                  FROM workflow_execution
+                 WHERE status = ? AND updated_at < ?
+                 ORDER BY updated_at
+                 LIMIT ?
+                """;
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, status.name());
+            statement.setTimestamp(2, new Timestamp(untouchedSince));
+            statement.setInt(3, Math.max(0, limit));
+
+            List<ExecutionRecord> stale = new ArrayList<>();
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    stale.add(read(rows));
+                }
+            }
+            return List.copyOf(stale);
+        } catch (SQLException failure) {
+            throw new StateStoreException("could not scan for stale executions", failure);
+        }
+    }
+
     public List<StepRecord> historyOf(ExecutionId executionId) {
         String sql = """
                 SELECT execution_id, step_id, step_type, outcome, input_snapshot, output_snapshot,

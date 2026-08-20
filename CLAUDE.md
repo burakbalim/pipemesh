@@ -116,6 +116,9 @@ passes the tests — say so rather than accepting it.
   lean on — the boundaries are explicit and easy to break. Check this whenever provider code moves.
 - **A retry is a policy, never a graph edge.** A step that loops back to itself to try again has
   put an operational concern where nobody can change it without editing the workflow.
+- **A crash is not a failure report.** An execution left in `RUNNING` is picked up by
+  `RecoverySweeper`; a step that may already have taken effect is not repeated, and the execution
+  stops for a person instead of guessing.
 - **Never retry what may already have happened.** A capability declares `idempotent: false` and the
   runtime refuses to repeat it, because a transport failure leaves it unknown whether the call
   landed.

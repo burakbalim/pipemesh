@@ -1,6 +1,9 @@
 package io.pipemesh.core.state;
 
 import io.pipemesh.core.execution.ExecutionId;
+import io.pipemesh.core.execution.ExecutionStatus;
+
+import java.util.List;
 
 import java.util.Optional;
 
@@ -28,4 +31,16 @@ public interface StateStore {
      * @throws StaleExecutionException if the record's version is no longer current
      */
     ExecutionRecord advance(ExecutionRecord record, StepRecord step);
+
+    /**
+     * Executions left in {@code status} and untouched since {@code untouchedSince}.
+     *
+     * <p>How recovery finds work that nobody owns any more. There is no heartbeat
+     * behind this — only the last time a row was written — so the answer is a
+     * guess, and the caller has to be safe when the guess is wrong.
+     *
+     * @param limit how many to return at most, so one sweep cannot pull in an
+     *              afternoon's worth of stuck work at once
+     */
+    List<ExecutionRecord> findStale(ExecutionStatus status, long untouchedSince, int limit);
 }

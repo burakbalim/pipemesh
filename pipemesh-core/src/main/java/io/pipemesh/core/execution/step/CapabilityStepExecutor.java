@@ -94,6 +94,23 @@ public final class CapabilityStepExecutor implements StepExecutor {
     }
 
     /**
+     * A capability that declared itself non-idempotent cannot be replayed after a
+     * crash: the call may have landed before the process died, and nothing on this
+     * side knows. The execution stops for a person rather than charging a card
+     * twice.
+     */
+    @Override
+    public boolean repeatable(Step step) {
+        String id = step.config().path(CAPABILITY).asText("");
+        if (id.isBlank()) {
+            return true;
+        }
+        return capabilities.find(CapabilityId.of(id))
+                .map(CapabilityDescriptor::idempotent)
+                .orElse(true);
+    }
+
+    /**
      * Strips the retryable flag from a capability that declared itself
      * non-idempotent.
      *

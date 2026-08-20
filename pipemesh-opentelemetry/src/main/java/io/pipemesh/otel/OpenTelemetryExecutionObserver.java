@@ -55,6 +55,7 @@ public final class OpenTelemetryExecutionObserver implements ExecutionObserver {
     private final DoubleHistogram executionDuration;
     private final DoubleHistogram stepDuration;
     private final DoubleHistogram approvalWait;
+    private final LongCounter recoveries;
     private final LongCounter attempts;
     private final LongCounter inputTokens;
     private final LongCounter outputTokens;
@@ -78,6 +79,9 @@ public final class OpenTelemetryExecutionObserver implements ExecutionObserver {
         this.approvalWait = meter.histogramBuilder("pipemesh.approval.wait_time")
                 .setDescription("How long an execution sat waiting before a decision arrived")
                 .setUnit("ms")
+                .build();
+        this.recoveries = meter.counterBuilder("pipemesh.workflow.recoveries")
+                .setDescription("Executions picked up after the process running them died")
                 .build();
         this.attempts = meter.counterBuilder("pipemesh.step.attempts")
                 .setDescription("Step attempts, by outcome — a retry that worked is not a success first time")
@@ -112,6 +116,13 @@ public final class OpenTelemetryExecutionObserver implements ExecutionObserver {
         stepDuration.record(event.latencyMillis(), attributes);
         attempts.add(1, attributes);
         countTokens(event, attributes);
+    }
+
+    @Override
+    public void executionRecovered(ExecutionEvent event) {
+        // Worth counting on its own: a rising number here means processes are
+        // dying mid-step, which is a different problem from workflows failing.
+        recoveries.add(1, attributesOf(event.attributes()));
     }
 
     @Override

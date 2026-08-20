@@ -1,6 +1,7 @@
 package io.pipemesh.core.state.memory;
 
 import io.pipemesh.core.execution.ExecutionId;
+import io.pipemesh.core.execution.ExecutionStatus;
 import io.pipemesh.core.state.ExecutionRecord;
 import io.pipemesh.core.state.StaleExecutionException;
 import io.pipemesh.core.state.StateStore;
@@ -8,6 +9,7 @@ import io.pipemesh.core.state.StepRecord;
 
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,6 +66,16 @@ public final class InMemoryStateStore implements StateStore {
         }
         history.computeIfAbsent(record.executionId(), key -> new ArrayList<>()).add(step);
         return stored;
+    }
+
+    @Override
+    public List<ExecutionRecord> findStale(ExecutionStatus status, long untouchedSince, int limit) {
+        return executions.values().stream()
+                .filter(record -> record.status() == status)
+                .filter(record -> record.updatedAtEpochMillis() < untouchedSince)
+                .sorted(Comparator.comparingLong(ExecutionRecord::updatedAtEpochMillis))
+                .limit(Math.max(0, limit))
+                .toList();
     }
 
     public List<StepRecord> historyOf(ExecutionId executionId) {

@@ -68,6 +68,11 @@ public final class CompositeExecutionObserver implements ExecutionObserver {
     }
 
     @Override
+    public void executionRecovered(ExecutionEvent event) {
+        each(observer -> observer.executionRecovered(event));
+    }
+
+    @Override
     public void tokenProduced(TokenEvent event) {
         each(observer -> observer.tokenProduced(event));
     }

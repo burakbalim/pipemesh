@@ -33,6 +33,15 @@ public interface ExecutionObserver {
     default void executionResumed(ExecutionEvent event) {
     }
 
+    /**
+     * An execution picked up after the process running it died.
+     *
+     * <p>Worth its own event rather than looking like a resume: a resume follows a
+     * decision somebody made, this follows a failure nobody reported.
+     */
+    default void executionRecovered(ExecutionEvent event) {
+    }
+
     default void executionFinished(ExecutionEvent event) {
     }
 

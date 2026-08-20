@@ -23,6 +23,12 @@ CREATE INDEX workflow_execution_waiting
     ON workflow_execution (organization_id, status, updated_at)
     WHERE status = 'WAITING';
 
+-- Recovery scans for executions a dead process left running, so this is the one
+-- index a sweep depends on.
+CREATE INDEX workflow_execution_running
+    ON workflow_execution (status, updated_at)
+    WHERE status = 'RUNNING';
+
 CREATE INDEX workflow_execution_by_organization
     ON workflow_execution (organization_id, workflow_id, created_at DESC);
 

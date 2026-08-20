@@ -31,4 +31,16 @@ public interface StepExecutor {
     default List<StepId> outgoing(Step step) {
         return List.of();
     }
+
+    /**
+     * Whether this step can be run again when nobody knows how far the last run
+     * got.
+     *
+     * <p>Asked during recovery, not during retry: a retry follows a failure that
+     * was reported, while recovery follows a silence. A step that may already have
+     * had an effect must say no, and only the code that reads its config can tell.
+     */
+    default boolean repeatable(Step step) {
+        return true;
+    }
 }
