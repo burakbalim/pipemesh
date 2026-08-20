@@ -32,8 +32,9 @@ out/
 ### IDE — VS Code ###
 .vscode/
 
-### Node (schema tooling, examples) ###
+### Node (SDK, schema tooling, examples) ###
 node_modules/
+dist/
 npm-debug.log*
 yarn-error.log*
 pnpm-debug.log*

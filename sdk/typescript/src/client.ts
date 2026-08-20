@@ -1,0 +1,371 @@
+/**
+ * A client for a running PipeMesh runtime.
+ *
+ * It does not execute workflows. The runtime does that, and an SDK's job is to
+ * reach it (DESIGN.md §26.2).
+ */
+
+import * as path from "node:path";
+import * as grpc from "@grpc/grpc-js";
+import * as protoLoader from "@grpc/proto-loader";
+
+/**
+ * The proto is loaded at runtime rather than compiled into generated classes,
+ * so installing this package needs no codegen step.
+ *
+ * It is copied into the package at build time from the one at the repository
+ * root — the same file the Java service is built from. Reaching up out of the
+ * package instead would work in this repository and break the moment anyone
+ * installed it from npm.
+ */
+const PROTO_PATH = path.resolve(__dirname, "..", "proto", "pipemesh.proto");
+
+const definition = protoLoader.loadSync(PROTO_PATH, {
+  keepCase: false,
+  longs: Number,
+  enums: String,
+  defaults: true,
+  oneofs: true,
+});
+
+const proto = grpc.loadPackageDefinition(definition) as unknown as {
+  pipemesh: { v1: { PipeMesh: grpc.ServiceClientConstructor } };
+};
+
+/** Where an execution stands. */
+export type ExecutionStatus =
+  | "CREATED"
+  | "RUNNING"
+  | "WAITING"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED";
+
+export function isWaiting(status: ExecutionStatus): boolean {
+  return status === "WAITING";
+}
+
+export function isTerminal(status: ExecutionStatus): boolean {
+  return status === "COMPLETED" || status === "FAILED" || status === "CANCELLED";
+}
+
+export interface ExecutionHandle {
+  executionId: string;
+  status: ExecutionStatus;
+  currentStep?: string;
+}
+
+export interface ExecutionSnapshot {
+  executionId: string;
+  organization: string;
+  workflowId: string;
+  workflowVersion: string;
+  status: ExecutionStatus;
+  currentStep?: string;
+  variables: Record<string, unknown>;
+}
+
+export interface Approval {
+  approvalId: string;
+  approved: boolean;
+  decidedBy?: string;
+  comment?: string;
+}
+
+/** Something that happened to an execution being watched. */
+export interface Update {
+  sequence: number;
+  kind: "started" | "stepFinished" | "suspended" | "resumed" | "finished" | "token";
+  stepId?: string;
+  text?: string;
+  status?: ExecutionStatus;
+}
+
+/**
+ * A call the runtime refused.
+ *
+ * The status code is kept because the useful question after a failure is whether
+ * it was this caller's mistake or the server's, and the answer decides whether
+ * retrying makes any sense.
+ */
+export class PipeMeshError extends Error {
+  readonly code: grpc.status;
+
+  constructor(message: string, code: grpc.status) {
+    super(message);
+    this.name = "PipeMeshError";
+    this.code = code;
+  }
+
+  get notFound(): boolean {
+    return this.code === grpc.status.NOT_FOUND;
+  }
+
+  get invalid(): boolean {
+    return this.code === grpc.status.INVALID_ARGUMENT;
+  }
+
+  get unimplemented(): boolean {
+    return this.code === grpc.status.UNIMPLEMENTED;
+  }
+}
+
+export interface PipeMeshOptions {
+  organization?: string;
+  credentials?: grpc.ChannelCredentials;
+}
+
+export class PipeMesh {
+  private readonly client: grpc.Client;
+  private readonly organization: string;
+
+  constructor(target = "localhost:8080", options: PipeMeshOptions = {}) {
+    this.organization = options.organization ?? "default";
+    this.client = new proto.pipemesh.v1.PipeMesh(
+      target,
+      options.credentials ?? grpc.credentials.createInsecure(),
+    );
+  }
+
+  /**
+   * Run a named workflow.
+   *
+   * Resolves as soon as the execution stops moving — finished, or waiting for a
+   * person. Waiting costs nothing on the server, so a workflow that needs an
+   * approval resolves promptly with a waiting status rather than holding the
+   * call open (DESIGN.md §26.4).
+   */
+  execute(
+    workflowId: string,
+    input: Record<string, unknown> = {},
+    options: { organization?: string; traceparent?: string } = {},
+  ): Promise<ExecutionHandle> {
+    return this.unary<ExecutionHandle>("StartExecution", {
+      workflowId,
+      input: toStruct(input),
+      organizationId: options.organization ?? this.organization,
+      traceparent: options.traceparent ?? "",
+    }, toHandle);
+  }
+
+  /**
+   * Let the runtime choose the workflow from a natural-language message.
+   *
+   * Not available yet: choosing needs intent resolution, and the server answers
+   * UNIMPLEMENTED rather than guessing.
+   */
+  process(message: string): Promise<ExecutionHandle> {
+    return this.unary<ExecutionHandle>("ProcessMessage", { message }, toHandle);
+  }
+
+  approve(executionId: string, approvalId: string, decidedBy = "", comment = ""): Promise<ExecutionHandle> {
+    return this.decide(executionId, { approvalId, approved: true, decidedBy, comment });
+  }
+
+  reject(executionId: string, approvalId: string, decidedBy = "", comment = ""): Promise<ExecutionHandle> {
+    return this.decide(executionId, { approvalId, approved: false, decidedBy, comment });
+  }
+
+  /**
+   * Deliver a decision.
+   *
+   * Delivering the same one twice is safe: the runtime advances an execution
+   * once and reports where it stands the second time.
+   */
+  decide(executionId: string, approval: Approval): Promise<ExecutionHandle> {
+    return this.unary<ExecutionHandle>("SubmitApproval", {
+      executionId,
+      approvalId: approval.approvalId,
+      approved: approval.approved,
+      decidedBy: approval.decidedBy ?? "",
+      comment: approval.comment ?? "",
+    }, toHandle);
+  }
+
+  get(executionId: string): Promise<ExecutionSnapshot> {
+    return this.unary<ExecutionSnapshot>("GetExecution", { executionId }, (reply: any) => ({
+      executionId: reply.executionId,
+      organization: reply.organizationId,
+      workflowId: reply.workflowId,
+      workflowVersion: reply.workflowVersion,
+      status: reply.status.replace("EXECUTION_STATUS_", "") as ExecutionStatus,
+      currentStep: reply.currentStepId || undefined,
+      variables: fromStruct(reply.variables),
+    }));
+  }
+
+  /**
+   * Yield what happens to an execution, until it ends.
+   *
+   * The subscription opens when this is called, not when the caller first reads
+   * from the iterator. A stream subscribed lazily would miss everything between
+   * asking to watch and getting round to reading, and the loss would be silent.
+   *
+   * The first item is always `started` and carries the status as of that moment
+   * — the point a caller can act from, knowing nothing after it will be missed.
+   * The stream ends itself when the execution reaches a terminal status.
+   */
+  watch(executionId: string): AsyncIterable<Update> {
+    return streamOf(this.serverStream(executionId));
+  }
+
+  close(): void {
+    this.client.close();
+  }
+
+  private serverStream(executionId: string): grpc.ClientReadableStream<unknown> {
+    const method = (this.client as unknown as Record<string, Function>).WatchExecution;
+    return method.call(this.client, { executionId }) as grpc.ClientReadableStream<unknown>;
+  }
+
+  private unary<T>(method: string, request: unknown, map: (reply: any) => T): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const call = (this.client as unknown as Record<string, Function>)[method];
+      call.call(this.client, request, (failure: grpc.ServiceError | null, reply: unknown) => {
+        if (failure) {
+          reject(new PipeMeshError(failure.details, failure.code));
+          return;
+        }
+        resolve(map(reply));
+      });
+    });
+  }
+}
+
+/**
+ * Encodes plain JavaScript as a `google.protobuf.Struct`.
+ *
+ * Written out rather than left to the loader: passing an object straight through
+ * produced a Struct whose numbers were not numbers, and the workflow failed on a
+ * condition that could not compare them. An encoding bug that reaches the
+ * runtime as a failed step is a long way from where it happened.
+ */
+function toStruct(value: Record<string, unknown>): unknown {
+  const fields: Record<string, unknown> = {};
+  for (const [name, entry] of Object.entries(value)) {
+    fields[name] = toValue(entry);
+  }
+  return { fields };
+}
+
+function toValue(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return { nullValue: "NULL_VALUE" };
+  }
+  if (typeof value === "number") {
+    return { numberValue: value };
+  }
+  if (typeof value === "boolean") {
+    return { boolValue: value };
+  }
+  if (typeof value === "string") {
+    return { stringValue: value };
+  }
+  if (Array.isArray(value)) {
+    return { listValue: { values: value.map(toValue) } };
+  }
+  return { structValue: toStruct(value as Record<string, unknown>) };
+}
+
+/** The same translation on the way back. */
+function fromStruct(struct: any): Record<string, unknown> {
+  const value: Record<string, unknown> = {};
+  for (const [name, entry] of Object.entries(struct?.fields ?? {})) {
+    value[name] = fromValue(entry);
+  }
+  return value;
+}
+
+function fromValue(value: any): unknown {
+  switch (value?.kind) {
+    case "numberValue":
+      return value.numberValue;
+    case "boolValue":
+      return value.boolValue;
+    case "stringValue":
+      return value.stringValue;
+    case "listValue":
+      return (value.listValue?.values ?? []).map(fromValue);
+    case "structValue":
+      return fromStruct(value.structValue);
+    default:
+      return null;
+  }
+}
+
+function toHandle(reply: any): ExecutionHandle {
+  return {
+    executionId: reply.executionId,
+    status: reply.status.replace("EXECUTION_STATUS_", "") as ExecutionStatus,
+    currentStep: reply.currentStepId || undefined,
+  };
+}
+
+function toUpdate(message: any): Update {
+  const kind = message.update as Update["kind"];
+  switch (kind) {
+    case "started":
+      return {
+        sequence: Number(message.sequence),
+        kind,
+        status: message.started.execution.status.replace("EXECUTION_STATUS_", ""),
+      };
+    case "stepFinished":
+      return { sequence: Number(message.sequence), kind, stepId: message.stepFinished.stepId };
+    case "suspended":
+      return { sequence: Number(message.sequence), kind, stepId: message.suspended.stepId };
+    case "resumed":
+      return { sequence: Number(message.sequence), kind, stepId: message.resumed.stepId };
+    case "finished":
+      return {
+        sequence: Number(message.sequence),
+        kind,
+        status: message.finished.status.replace("EXECUTION_STATUS_", ""),
+      };
+    case "token":
+      return {
+        sequence: Number(message.sequence),
+        kind,
+        stepId: message.token.stepId,
+        text: message.token.text,
+      };
+    default:
+      return { sequence: Number(message.sequence), kind };
+  }
+}
+
+/**
+ * Wraps the gRPC stream as an async iterable that releases the call when the
+ * reader stops.
+ *
+ * Leaving early has to hang up. A `break` out of a `for await`, or an iterator
+ * simply dropped, calls `return()` — and without cancelling there, the
+ * connection stays open, the server keeps a subscriber nobody reads, and a Node
+ * process will not exit because something is still listening.
+ */
+function streamOf(call: grpc.ClientReadableStream<unknown>): AsyncIterable<Update> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<Update> {
+      const messages = (call as unknown as AsyncIterable<unknown>)[Symbol.asyncIterator]();
+
+      return {
+        async next(): Promise<IteratorResult<Update>> {
+          try {
+            const message = await messages.next();
+            return message.done
+              ? { done: true, value: undefined }
+              : { done: false, value: toUpdate(message.value) };
+          } catch (failure) {
+            const error = failure as grpc.ServiceError;
+            throw new PipeMeshError(error.details ?? String(failure), error.code);
+          }
+        },
+
+        async return(): Promise<IteratorResult<Update>> {
+          call.cancel();
+          return { done: true, value: undefined };
+        },
+      };
+    },
+  };
+}
