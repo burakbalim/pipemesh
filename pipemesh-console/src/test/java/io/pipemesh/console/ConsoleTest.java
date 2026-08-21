@@ -46,7 +46,7 @@ public abstract class ConsoleTest {
     /** Accounts only. The plan rows are schema, not test data. */
     @AfterEach
     void emptyAccounts() {
-        jdbc.execute("TRUNCATE console_session, console_verification, console_user,"
-                + " console_organization CASCADE");
+        jdbc.execute("TRUNCATE console_api_key, console_session, console_verification,"
+                + " console_user, console_organization CASCADE");
     }
 }

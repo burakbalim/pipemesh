@@ -45,6 +45,16 @@ public class ApiErrors {
         return answer(HttpStatus.FORBIDDEN, "account_unverified", failure);
     }
 
+    @ExceptionHandler(NotSignedInException.class)
+    public ResponseEntity<ApiError> notSignedIn(NotSignedInException failure) {
+        return answer(HttpStatus.UNAUTHORIZED, "not_signed_in", failure);
+    }
+
+    @ExceptionHandler(UnknownApiKeyException.class)
+    public ResponseEntity<ApiError> unknownKey(UnknownApiKeyException failure) {
+        return answer(HttpStatus.NOT_FOUND, "api_key_unknown", failure);
+    }
+
     private ResponseEntity<ApiError> answer(HttpStatus status, String code, Exception failure) {
         return ResponseEntity.status(status).body(new ApiError(code, failure.getMessage()));
     }

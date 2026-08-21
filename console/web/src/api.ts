@@ -55,6 +55,20 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   );
 }
 
+export interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface IssuedApiKey {
+  key: ApiKey;
+  /** The one moment this exists outside the holder's hands. */
+  secret: string;
+}
+
 export const api = {
   register(organizationName: string, email: string, password: string): Promise<Organization> {
     return call("/organizations", {
@@ -73,6 +87,18 @@ export const api = {
 
   signOut(): Promise<void> {
     return call("/sessions", { method: "DELETE" });
+  },
+
+  apiKeys(): Promise<ApiKey[]> {
+    return call("/api-keys");
+  },
+
+  issueApiKey(name: string): Promise<IssuedApiKey> {
+    return call("/api-keys", { method: "POST", body: JSON.stringify({ name }) });
+  },
+
+  revokeApiKey(id: string): Promise<void> {
+    return call(`/api-keys/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
   /** Who the browser is, or null. Every screen asks this on load. */

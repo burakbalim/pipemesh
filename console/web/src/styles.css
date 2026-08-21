@@ -94,3 +94,59 @@ a {
   color: var(--failure);
   margin: 0;
 }
+
+.notice {
+  margin: 1.25rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+
+.notice p {
+  margin: 0 0 0.5rem;
+}
+
+code {
+  display: block;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.keys {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.keys li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.keys code {
+  display: inline;
+}
+
+.keys button {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--failure);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+section h2 {
+  margin-top: 2.5rem;
+  font-size: 1.15rem;
+}

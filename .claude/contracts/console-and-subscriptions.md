@@ -305,9 +305,38 @@ sızdırmıyor — ve "e-posta veya parola yanlış" demek ona bir öğlen kaybe
 **Demo planı bir satır.** `V101__console_identity.sql` içinde `INSERT INTO console_plan`. Kodda
 `isDemo` dalı yok, olmayacak.
 
+### Dilim A — anahtarlar ve köprü (2026-08-21)
+
+16 yeni test (11 anahtar/resolver, 5 uçtan uca HTTP) — toplam 407 Java.
+
+**`PrincipalResolver`'ın javadoc'u kapandı.** Üç contract'tır orada duran cümle —
+*"this is where an application plugs in the answer"* — artık bir implementasyona işaret ediyor.
+`ConsolePrincipalResolver` metadata'daki anahtarı hash'leyip arıyor, organizasyonu ve **planın
+izinlerini** taşıyan bir `Principal` üretiyor. §22.2'nin "kimseyi tanımlamayan deployment"
+uyarısı bu deployment için artık geçerli değil.
+
+**İzinler anahtarda değil planda.** `changingThePlanChangesWhatExistingKeysMayDo` bunu tutuyor:
+abonelik içeriği değişince mevcut anahtarların yapabildikleri değişiyor, hiçbir şey yeniden
+üretilmiyor. İzni anahtara kopyalamak, plan değişiminin sessizce etkisiz kalması demekti.
+
+**Dört ret durumu birbirinden ayırt edilemiyor.** Başlık yok, bozuk, bilinmeyen, iptal edilmiş —
+hepsi `ANONYMOUS`. Ve anonim olmak bir hata değil: izin istemeyen capability yine koşuyor, ret
+gereksinimin bulunduğu yerde oluyor — ki neyin gerektiğini bilen tek yer orası.
+
+**Sahiplik `WHERE`'de, önceden kontrolde değil.** `revoke(id, organizationId)` tek ifade; kontrol
+ile yazma iki ayrı an olurdu ve yalnızca biri önemli olurdu. Başkasının anahtarını iptal etmek
+"hiç yoktu" cevabını alıyor — ayırt etmek, hesabı olan herkese anahtar id'si arama imkânı verirdi.
+
+**Gizli anahtar yalnızca üretim cevabında.** Saklanan hash; kaybolan anahtar kurtarılmıyor,
+yenisi veriliyor. Geri gösterebilen bir console, console erişimi olan herkesin ürettiği her
+anahtarı devralabildiği bir console olurdu.
+
+**Yolda:** `@PathVariable String id` çalışmadı — Spring parametre adlarını okuyor, javac
+`-parameters` olmadan atıyor, ve `spring-boot-starter-parent` kullanmadığımız için bayrak
+gelmiyordu. Console modülüne eklendi; çalışma zamanı modüllerine bulaşmıyor.
+
 ### Sıradaki dilimler
 
-- **A** — API anahtarları + `ConsolePrincipalResolver`
 - **B** — plan, kota, kullanım sayacı
 - **C** — demo ekranı
 

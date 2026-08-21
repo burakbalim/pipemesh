@@ -1,4 +1,5 @@
 import { api, User } from "../api";
+import { Keys } from "./Keys";
 
 /**
  * What is here now is only the frame: who is signed in, and a way out.
@@ -24,6 +25,7 @@ export function Dashboard({ user, onSignedOut }: { user: User; onSignedOut: () =
       <p>
         Signed in as <strong>{user.email}</strong>.
       </p>
+      <Keys />
     </main>
   );
 }

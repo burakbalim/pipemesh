@@ -33,6 +33,6 @@ public class ConsoleConfiguration {
     @Bean
     public InitializingBean consoleSchema(DataSource dataSource) {
         return () -> new SchemaMigrator(
-                dataSource, MIGRATIONS, List.of("V101__console_identity.sql")).migrate();
+                dataSource, MIGRATIONS, List.of("V101__console_identity.sql", "V102__console_api_key.sql")).migrate();
     }
 }

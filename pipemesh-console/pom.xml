@@ -24,6 +24,15 @@
             <artifactId>pipemesh-postgres</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!--
+          For PrincipalResolver: the console is the application that finally
+          answers "who is calling", which the runtime cannot answer for itself.
+        -->
+        <dependency>
+            <groupId>io.pipemesh</groupId>
+            <artifactId>pipemesh-grpc</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -64,4 +73,24 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+              Spring reads parameter names to bind @PathVariable and friends, and
+              javac drops them unless asked. The runtime modules do not need this;
+              this module is not inheriting spring-boot-starter-parent, which is
+              where the flag would otherwise have come from.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs>
+                        <arg>-parameters</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
