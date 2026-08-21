@@ -28,6 +28,7 @@
         <module>pipemesh-mcp</module>
         <module>pipemesh-opentelemetry</module>
         <module>pipemesh-grpc</module>
+        <module>pipemesh-console</module>
     </modules>
 
     <properties>
@@ -41,6 +42,7 @@
         <opentelemetry.version>1.55.0</opentelemetry.version>
         <grpc.version>1.68.1</grpc.version>
         <protobuf.version>3.25.5</protobuf.version>
+        <spring.boot.version>3.4.3</spring.boot.version>
     </properties>
 
     <dependencyManagement>
@@ -89,6 +91,20 @@
                 <groupId>org.junit</groupId>
                 <artifactId>junit-bom</artifactId>
                 <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!--
+              Spring belongs to the console and nowhere else. Imported last on
+              purpose: in dependencyManagement the first declaration wins, and the
+              runtime modules' versions are not Spring's to choose. Putting this
+              first silently moved testcontainers, which is exactly the kind of
+              thing a framework does when it is let near the middle of a build.
+            -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring.boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

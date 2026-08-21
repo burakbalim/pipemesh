@@ -176,8 +176,138 @@ kendi API anahtarıyla, kendi organizasyonunda, aynı gRPC sınırından geçiyo
 
 ## Split Decision
 
-_To be filled by Agent 0_
+**Decision:** multi-agent (dikey dilimler) — ama **temel önce, tek elden**
+**Tarih:** 2026-08-21
+
+Bu, depodaki ilk contract ki bölmeyi gerçekten hak ediyor: dört katman (Spring backend, web UI,
+kendi şeması, gRPC sınırına bağlanma) ve contract net — API, tablolar, ekranlar yazılı.
+
+Ama dilimler **birbirinden bağımsız değil**, ve depoda Spring kodu için henüz hiçbir konvansiyon
+yok. Paralel ajanlar her biri kendi kalıbını icat ederdi. Bu yüzden:
+
+```text
+Aşama 0  (tek elden)   temel: modül iskeleti, şema, organizasyon + kullanıcı, oturum
+   │
+   ├── Dilim A  (paralel)   API anahtarları + PrincipalResolver köprüsü
+   ├── Dilim B  (paralel)   plan, kota, kullanım sayacı
+   │
+   └── Dilim C  (ikisinden sonra)   demo ekranı
+```
+
+### Aşama 0 — temel (tek elden)
+
+`pipemesh-console` Maven modülü, `console_*` şeması ve migration, organizasyon + kullanıcı
+kaydı, argon2 parola, e-posta doğrulama, oturum. `/signup`, `/verify`, `/signin` ekranları.
+
+Bu aşama aynı zamanda **konvansiyonu kuruyor**: Spring katmanlaması, hata gövdesi biçimi,
+test kalıbı (Testcontainers + MockMvc), frontend dosya düzeni. Sonraki dilimler ona bakarak
+yazılıyor.
+
+### Dilim A — anahtarlar ve köprü
+
+`console_api_key`, üretme/iptal, hash'lenmiş saklama, `/keys` ekranı. Ve asıl parça:
+`ConsolePrincipalResolver` — gRPC metadata'sındaki anahtarı doğrulayıp organizasyonu ve planın
+izinlerini taşıyan bir `Principal` üretiyor. `PrincipalResolver`'ın javadoc'unda üç contract'tır
+bekleyen "an application plugs in the answer" cümlesi burada kapanıyor.
+
+### Dilim B — plan, kota, kullanım
+
+`console_plan`, `console_usage`, dönemsel sayaç. `StartExecution` öncesi kota kontrolü ve biten
+execution'ın `Spend`'inin sayaca eklenmesi. Kullanım/kota panosu.
+
+**Kotanın nereye takılacağı bu dilimin asıl kararı.** Motora girmiyor (§3). Doğal yer, çağrıyı
+zaten kesen bir gRPC interceptor'ı — `CallMetadata` deseninin ikinci kullanıcısı.
+
+### Dilim C — demo
+
+Hazır bir örnek workflow, "çalıştır" düğmesi, canlı ilerleme. #20'nin `step.started`'ı tam
+buranın için: demo bir adımda takılıp sessiz kalmamalı.
+
+## Tarayıcı gRPC konuşmuyor
+
+Canlı ilerleme için tarayıcının `WatchExecution`'a bağlanması gerekiyor, ama tarayıcılar gRPC
+server streaming'i doğrudan konuşamıyor — grpc-web ve bir proxy gerekir.
+
+Bunun yerine **console backend'i akışı SSE olarak yeniden yayınlıyor**. Tarayıcı yalnızca
+console ile konuşuyor; oturum çerezi zaten orada, ikinci bir kimlik yolu açılmıyor, ve Envoy
+gibi bir bileşen deploy'a girmiyor.
+
+Bu, #20'nin kararını doğruluyor: olay modeli transport'tan bağımsız tutulmuştu, ve ilk ikinci
+transport buradan geldi.
+
+## Frontend: React + Vite, `console/web`
+
+Altı ekran, formlar ve canlı güncellenen bir görünüm. Angular bu iş için çok fazla şey
+getiriyor; düz TypeScript ise canlı ekranı elle yazdırırdı. Depo zaten TypeScript araç zinciri
+taşıyor (SDK), aynı dilde kalmak ikinci bir yapı hattı açmıyor.
+
+### Risk points
+
+- **Framework-free kuralının delinmiş görünmesi.** `pipemesh-core`'un console'a bağımlı
+  olmadığı **testle** kanıtlanmalı (`dependency:tree`), yorumla değil. Bir modül bir kez yanlış
+  yöne bağlandığında geri almak çok pahalı.
+- **Demo'nun ayrı bir kod yolu olması.** `/demo` ekranı kullanıcının kendi anahtarıyla, kendi
+  organizasyonunda, aynı gRPC sınırından geçmeli. Kısa yol açmak, demoda çalışanın üründe
+  çalışacağı garantisini bitirir.
+- **Kota kontrolünün yanlış yere düşmesi.** Motora girerse §3 bozulur ve geri alması zor.
+  Interceptor, ve orada kalmalı.
+- **Parola ve anahtar.** Argon2 parametreleri seçilmeli ve yazılmalı; anahtar düz hâliyle
+  yalnızca üretim cevabında dönmeli. İkisi de sonradan düzeltilmesi en pahalı şeyler.
+- **E-posta gönderimi.** Doğrulama linki kritik yolda: SMTP çalışmazsa kimse kaydolamıyor.
+  Geliştirmede linkin log'a yazılması yeterli; üretimde bir sağlayıcı gerekiyor ve bu bir
+  deploy bağımlılığı.
+- **Dilimlerin şemayı ayrı ayrı değiştirmesi.** Migration dosyaları tek numaralı sıra
+  paylaşıyor; iki dilim aynı numarayı alırsa biri sessizce koşmaz. Aşama 0 tüm tabloları
+  yazsın, dilimler yalnızca doldursun.
+
+### Ajan bölmesi hakkında
+
+Bölme yukarıda planlandı, ama **ajanları ancak istenirse başlatırım**. İstenmezse aynı sıra
+tek elden koşulur — A ve B'nin paralelliği sadece takvimi kısaltır, sonucu değiştirmez.
 
 ## Implementation Notes
 
-_To be filled as work progresses_
+### Aşama 0 — temel (2026-08-21)
+
+`pipemesh-console` modülü ayakta: kayıt, e-posta doğrulama, oturum ve dört ekran. 21 yeni test
+(9 kayıt, 9 oturum, 3 modül sınırı) — toplam 391 Java. SDK'lar etkilenmedi (37 Python, 25 TS).
+
+**Spring BOM'u sırayı ele geçirdi.** `spring-boot-dependencies`'i parent'ın
+`dependencyManagement`'ının **başına** koymak testcontainers sürümünü 1.20.4'ten 1.20.5'e
+kaydırdı ve offline build kırıldı. `dependencyManagement`'ta ilk beyan kazanıyor; BOM sona
+alındı ve yorumu yazıldı: **çalışma zamanı modüllerinin sürümlerini Spring seçmez.** Bir
+framework'ün build'in ortasına bırakıldığında yaptığı şeyin ders niteliğinde örneği.
+
+**Modül sınırı yorumla değil testle tutuluyor.** `ModuleBoundaryTest` altı çalışma zamanı
+modülünün pom'unu okuyup ne console'a bağımlı olduklarını ne de Spring taşıdıklarını
+doğruluyor. Yanlış yöne bağlanmış bir modül eklemesi ucuz, geri alması pahalı — fark edildiğinde
+framework-free sözü zaten devralan herkes için bozulmuş olur.
+
+**`@ConditionalOnMissingBean` sessizce hiçbir şey yapmıyor.** `LoggingVerificationLinkSender`'ı
+öyle işaretlemiştim; o anotasyon yalnızca auto-configuration'daki `@Bean` metotlarında anlam
+taşıyor, `@Component` üzerinde değil — context hiç ayağa kalkmadı. Düz `@Component` oldu, gerçek
+gönderici `@Primary` ile geliyor. Hiçbir şey yapmayan bir koşul, koşulsuz olmaktan kötü.
+
+**Token'lar SHA-256, parola argon2 — ve gerekçesi yazılı.** Doğrulama linki ve oturum token'ı
+256 bit rastgelelik; tahmin edilecek bir şey yok, yavaş hash'in satın alacağı bir şey de yok.
+Parola tam tersi durum. İkisini aynı şekilde saklamak, birinde gereksiz maliyet diğerinde
+yetersiz koruma demek olurdu.
+
+**Doğrulama linki tek ifadede harcanıyor.** `UPDATE ... WHERE used_at IS NULL AND expires_at > ?
+RETURNING user_id`. Önce oku sonra yaz olsaydı, aynı anda gelen iki tıklama ikisi de boşluğu
+bulurdu.
+
+**Giriş reddi tek mesaj, doğrulanmamış hesap ayrı.** Yanlış adres ile yanlış parolayı ayırmak,
+giriş formunu "hangi adreslerin hesabı var" sorgusuna çevirirdi. Doğrulanmamış hesap farklı:
+kişi parolayı zaten bildiğini kanıtladı, dolayısıyla ona ne olduğunu söylemek hiçbir şey
+sızdırmıyor — ve "e-posta veya parola yanlış" demek ona bir öğlen kaybettirirdi.
+
+**Demo planı bir satır.** `V101__console_identity.sql` içinde `INSERT INTO console_plan`. Kodda
+`isDemo` dalı yok, olmayacak.
+
+### Sıradaki dilimler
+
+- **A** — API anahtarları + `ConsolePrincipalResolver`
+- **B** — plan, kota, kullanım sayacı
+- **C** — demo ekranı
+

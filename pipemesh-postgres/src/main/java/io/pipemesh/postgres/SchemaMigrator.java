@@ -29,9 +29,26 @@ public final class SchemaMigrator {
             "V003__execution_spend.sql");
 
     private final DataSource dataSource;
+    private final String location;
+    private final List<String> migrations;
 
     public SchemaMigrator(DataSource dataSource) {
+        this(dataSource, LOCATION, MIGRATIONS);
+    }
+
+    /**
+     * @param location   classpath directory the files live in
+     * @param migrations file names, in the order they must be applied
+     *
+     * <p>An application with its own tables in the same database uses this rather
+     * than a second migrator: one history table means one place to look when
+     * asking what has been applied. File names have to stay distinct across
+     * callers, which is what the {@code Vnnn__} prefix is for.
+     */
+    public SchemaMigrator(DataSource dataSource, String location, List<String> migrations) {
         this.dataSource = Objects.requireNonNull(dataSource, "data source");
+        this.location = Objects.requireNonNull(location, "location");
+        this.migrations = List.copyOf(Objects.requireNonNull(migrations, "migrations"));
     }
 
     public void migrate() {
@@ -39,7 +56,7 @@ public final class SchemaMigrator {
             connection.setAutoCommit(false);
             createHistoryTable(connection);
             List<String> applied = appliedMigrations(connection);
-            for (String migration : MIGRATIONS) {
+            for (String migration : migrations) {
                 if (!applied.contains(migration)) {
                     apply(connection, migration);
                 }
@@ -84,7 +101,7 @@ public final class SchemaMigrator {
     }
 
     private String read(String migration) {
-        try (InputStream sql = SchemaMigrator.class.getResourceAsStream(LOCATION + migration)) {
+        try (InputStream sql = SchemaMigrator.class.getResourceAsStream(location + migration)) {
             if (sql == null) {
                 throw new StateStoreException("migration not found: " + migration, null);
             }
