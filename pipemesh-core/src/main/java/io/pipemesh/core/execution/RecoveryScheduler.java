@@ -16,8 +16,13 @@ import java.util.function.Consumer;
  *
  * <p>Deliberately simple: one virtual thread, a fixed delay, no coordination
  * between instances. Two runtimes sweeping at once is safe — the store's version
- * check settles it — but wasteful, and dividing the work between them is what
- * distributed execution is for.
+ * check settles it — but wasteful.
+ *
+ * <p>{@code ExecutionDispatcher.dispatchOnce()} fits {@link RecoveryPass} too, so
+ * the same schedule can drive dispatch. That is the division of work between
+ * instances the earlier note here was waiting for: a dispatcher claims before it
+ * drives, so two of them on the same schedule take different executions rather
+ * than the same one twice.
  */
 public final class RecoveryScheduler implements AutoCloseable {
 

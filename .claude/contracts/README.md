@@ -21,7 +21,7 @@ onunla çelişmez.
 | 8 | [capability-permissions.md](capability-permissions.md) | §23 Security model — izin zorlaması | **Tamam** (2026-08-21) |
 | 9 | [workflow-versioning.md](workflow-versioning.md) | §24, §24.1 — sürüm kimliğin parçası; migrasyon kapsam dışı | **Tamam** (2026-08-21) |
 | 10a | [orphan-recovery.md](orphan-recovery.md) | §15, §38 — `RUNNING`'de takılı execution'ları toplama | **Tamam** (2026-08-20) |
-| 10 | _distributed-workers_ | §28 Queue + worker dağıtımı, §38 reliability | Planlanan |
+| 10 | [distributed-workers.md](distributed-workers.md) | §28.1 — kira ile kapma, dispatcher, `StartMode` | **Tamam** (2026-08-21) |
 | 11 | _cost-and-evaluation_ | §39 cost tracking, evaluation, model routing | Planlanan |
 | 12 | [grpc-boundary.md](grpc-boundary.md) | §26.1 gRPC servisi (`CapabilityWorker` hariç → #14) | **Tamam** (2026-08-20) |
 | 13a | [python-sdk.md](python-sdk.md) | Python client — proto'dan üretilen stub'lar + ince sarmalayıcı | **Tamam** (2026-08-20) |

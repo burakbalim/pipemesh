@@ -100,9 +100,22 @@ public final class WorkflowExecutor {
     public ExecutionRecord start(
             ExecutionGraph graph, ExecutionId executionId, ExecutionRequest request) {
 
+        return drive(graph, create(graph, executionId, request));
+    }
+
+    /**
+     * Writes the execution down without running it.
+     *
+     * <p>Separate from {@link #start} because a distributed deployment enqueues
+     * here and lets whichever instance claims it do the driving (§28). The two
+     * together are exactly what {@code start} used to do inline.
+     */
+    public ExecutionRecord create(
+            ExecutionGraph graph, ExecutionId executionId, ExecutionRequest request) {
+
         ExecutionRecord created = stateStore.create(initialRecord(graph, executionId, request));
         observer.executionStarted(eventOf(created));
-        return drive(graph, created);
+        return created;
     }
 
     /**
@@ -493,7 +506,11 @@ public final class WorkflowExecutor {
                 request.organization(),
                 graph.workflowId(),
                 graph.version(),
-                ExecutionStatus.RUNNING,
+                // Written down but not yet moving. Inline, the very next line
+                // drives it; dispatched, this is what a driver comes looking for
+                // (§28). Calling it RUNNING before anyone runs it would make the
+                // status say something untrue to every reader of it.
+                ExecutionStatus.CREATED,
                 graph.entry(),
                 variables,
                 trace.toTraceParent(),

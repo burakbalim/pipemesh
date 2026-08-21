@@ -68,6 +68,13 @@ public final class InMemoryStateStore implements StateStore {
         return stored;
     }
 
+    /** Everything that could move on its own, for {@link InMemoryExecutionLeases}. */
+    List<ExecutionRecord> runnable() {
+        return executions.values().stream()
+                .filter(record -> record.status().isDrivable())
+                .toList();
+    }
+
     @Override
     public List<ExecutionRecord> findStale(ExecutionStatus status, long untouchedSince, int limit) {
         return executions.values().stream()

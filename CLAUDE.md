@@ -136,6 +136,14 @@ passes the tests — say so rather than accepting it.
   inside one step and gets one history row, so anything unrepeatable in there makes the whole step
   unrepeatable. `ParallelStepExecutor.repeatable` asks its branches; a step type that forgets to
   ask is one that can take a payment twice.
+- **Work is taken, not assigned.** Instances claim executions with a lease; there is no central
+  dispatcher to fail or to disagree with the rows. A lease says who *should* drive — the version
+  check is what guarantees only one *can*. And a lease proves the owner is renewing, not that the
+  work is moving, which is why the recovery sweep (watching when the row was last written) is not
+  redundant with it (§28.1).
+- **A lease is never execution state.** Who is driving is an operational fact about the deployment.
+  It lives in its own table and must not reach `ExecutionRecord`, a snapshot, a telemetry event or
+  the proto.
 - **A crash is not a failure report.** An execution left in `RUNNING` is picked up by
   `RecoverySweeper`; a step that may already have taken effect is not repeated, and the execution
   stops for a person instead of guessing. Something must actually run the sweeper —

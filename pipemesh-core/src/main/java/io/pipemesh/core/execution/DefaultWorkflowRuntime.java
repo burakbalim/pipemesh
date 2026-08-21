@@ -29,6 +29,7 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
     private final StateStore stateStore;
     private final WorkflowExecutor executor;
     private final IntentResolver intents;
+    private final StartMode startMode;
 
     public DefaultWorkflowRuntime(
             WorkflowRegistry workflows, StateStore stateStore, WorkflowExecutor executor) {
@@ -45,10 +46,22 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
             WorkflowRegistry workflows, StateStore stateStore, WorkflowExecutor executor,
             IntentResolver intents) {
 
+        this(workflows, stateStore, executor, intents, StartMode.INLINE);
+    }
+
+    /**
+     * @param startMode whether {@code start} drives the execution itself or leaves
+     *                  it for a dispatcher to claim (§28)
+     */
+    public DefaultWorkflowRuntime(
+            WorkflowRegistry workflows, StateStore stateStore, WorkflowExecutor executor,
+            IntentResolver intents, StartMode startMode) {
+
         this.workflows = Objects.requireNonNull(workflows, "workflow registry");
         this.stateStore = Objects.requireNonNull(stateStore, "state store");
         this.executor = Objects.requireNonNull(executor, "executor");
         this.intents = intents;
+        this.startMode = Objects.requireNonNull(startMode, "start mode");
     }
 
     @Override
@@ -59,8 +72,11 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
         refuseIfNotTheirs(request.principal(), request.organization());
 
         ExecutionGraph graph = graphFor(request);
+        ExecutionId executionId = ExecutionId.generate();
 
-        return handleOf(executor.start(graph, ExecutionId.generate(), request));
+        return handleOf(startMode == StartMode.DISPATCHED
+                ? executor.create(graph, executionId, request)
+                : executor.start(graph, executionId, request));
     }
 
     /**

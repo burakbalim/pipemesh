@@ -1835,6 +1835,48 @@ Multiple workflow executions can be distributed across workers:
     Worker 1    Worker 2    Worker 3
 ```
 
+## 28.1 Work is taken, not assigned
+
+There is no assigner in the middle. Each runtime instance asks the store for executions nobody is
+driving and takes a lease on what it gets:
+
+```text
+claim(owner, duration, limit)  →  up to `limit` executions, now mine
+renew(lease, duration)         →  still here
+release(lease)                 →  done, or giving up
+```
+
+An assigner would be both a single point of failure and a second answer to "what is runnable" when
+the rows already know. Claiming keeps the authority in one place: the row itself.
+
+**The queue is the database.** A broker in `core/` would break the framework-free rule and add that
+second answer. `claim` is one statement — a CTE selecting drivable executions `FOR UPDATE ... SKIP
+LOCKED`, then upserting the lease. `SKIP LOCKED` is what makes a second instance add throughput
+instead of latency: two of them stepping over each other's locked rows rather than queueing behind
+them. This has a real ceiling — it is polling, not push — and `ExecutionLeases` is where a broker
+plugs in when the ceiling is reached.
+
+**A lease is not execution state.** Who is currently driving is an operational fact about the
+deployment. It lives in its own table, never in `ExecutionRecord`, and so never reaches a snapshot,
+a telemetry event or the wire, where it would mean nothing to a caller.
+
+**A lease does not prove the owner is alive.** It proves the owner is renewing. A heartbeat says the
+process is up, not that the work is moving — a driver wedged inside one step goes on renewing while
+advancing nothing. This is why §15's recovery sweep stays: it watches when the execution row was
+last *written*, which a wedged step does not update. The two mechanisms answer different questions,
+and neither replaces the two safety nets underneath both — the version check means only one writer
+can advance an execution, and `repeatable` means a step that may already have had an effect is never
+run twice.
+
+**Only what can move on its own is claimable.** An execution waiting for a person or an event is not
+stuck; claiming it would occupy a driver with work that cannot progress.
+
+**Distributing is opt-in.** `StartMode.INLINE` — the calling thread drives the execution — stays the
+default, because nobody running a single instance should have to stand up a dispatcher to see a
+workflow run. `StartMode.DISPATCHED` writes the execution down and returns, leaving it for whichever
+instance claims it. The trap is worth stating: a dispatched runtime with nothing dispatching accepts
+work and never runs it.
+
 ---
 
 # 29. Concurrency Model

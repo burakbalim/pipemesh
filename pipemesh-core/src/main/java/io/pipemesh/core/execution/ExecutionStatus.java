@@ -21,4 +21,14 @@ public enum ExecutionStatus {
     public boolean isResumable() {
         return this == WAITING;
     }
+
+    /**
+     * Whether an execution in this state can move without anything arriving from
+     * outside — which is exactly what a driver may claim (§28). {@code WAITING} is
+     * not stuck, it is waiting; claiming it would occupy a driver with work that
+     * cannot progress.
+     */
+    public boolean isDrivable() {
+        return this == CREATED || this == RUNNING;
+    }
 }

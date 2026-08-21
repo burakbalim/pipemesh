@@ -40,8 +40,13 @@ import java.util.Optional;
  *       instead.
  * </ul>
  *
- * <p>Nothing here decides <em>when</em> to sweep. That belongs to whoever runs the
- * runtime, until distributed execution takes it over.
+ * <p>Nothing here decides <em>when</em> to sweep — {@link RecoveryScheduler} does,
+ * and the same schedule can drive an {@code ExecutionDispatcher}.
+ *
+ * <p>Leases did not make this redundant. A lease expires when nobody renews it,
+ * which says the process stopped; this looks at when the execution row was last
+ * written, which says the <em>work</em> stopped. A driver wedged inside one step
+ * goes on renewing happily while advancing nothing, and only this notices.
  */
 public final class RecoverySweeper {
 

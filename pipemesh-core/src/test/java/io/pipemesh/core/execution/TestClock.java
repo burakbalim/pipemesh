@@ -23,6 +23,10 @@ public final class TestClock extends Clock {
         this.instant = instant;
     }
 
+    public void advance(java.time.Duration by) {
+        this.instant = instant.plus(by);
+    }
+
     @Override
     public ZoneId getZone() {
         return ZoneOffset.UTC;
