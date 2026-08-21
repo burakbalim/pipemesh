@@ -500,14 +500,58 @@ Performs deterministic data transformation.
 
 ## 9.7 Wait
 
-Allows event-driven workflows.
+Suspends an execution until something outside it happens.
 
 ```json
 {
   "type": "wait",
-  "event": "payment_completed"
+  "event": "payment_completed",
+  "correlationKey": "$.order.id",
+  "output": "payment",
+  "next": "ship",
+  "timeoutSeconds": 3600,
+  "onTimeout": "chase_payment"
 }
 ```
+
+### The matching problem
+
+Approval and wait share all their suspension machinery, and differ in exactly one place: who
+knows the address. An approver holds the `approvalId` the runtime handed out. A payment service
+holds no such thing — it knows an order number and nothing about executions.
+
+So a wait is filed under a **key computed from the variables at the moment of suspension**:
+
+```text
+suspending:  (organization, "payment_completed", $.order.id → "A-4172")  is recorded
+publishing:  (organization, "payment_completed", "A-4172")  is looked up  →  execution found
+```
+
+The key is frozen at suspend time. If the variable later changes, the wait still stands where it
+was filed — the alternative, recomputing on publish, would mean an execution's address depends on
+work it did after it stopped.
+
+**The organization is part of the key, not a filter applied afterwards.** One tenant publishing an
+event must not advance another tenant's execution (§22.2), and a boundary enforced by remembering
+to add a `WHERE` clause is a boundary that eventually leaks.
+
+**A publish reaches every matching execution, not the first.** Two orders may wait on the same
+event; stopping at the first is silently forgetting the rest.
+
+**A key that cannot be computed is refused.** If the correlation path is absent from the variables,
+the step fails rather than filing itself under an empty key — that would be an execution nobody can
+ever reach and nobody notices, which is worse than a failure.
+
+### Bounded by choice
+
+`timeoutSeconds` is optional, and an omitted one means the wait is genuinely unbounded. That is
+allowed, but only as something someone wrote down: an execution stuck in `WAITING` forever is the
+same failure as an unbounded step budget or an unbounded agent loop (§9.9, §17), and those are
+bounded here for the same reason. When the deadline passes, the execution branches to `onTimeout`,
+or fails if there is nowhere to go.
+
+Expiry is collected by the pass that already runs for orphan recovery (§38) rather than a second
+scheduler — one thing to deploy, one thing to forget to deploy.
 
 ---
 

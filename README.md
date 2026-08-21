@@ -16,8 +16,9 @@ Runtime        →  HOW it happens
 ```
 
 > **Status:** v0.1, first slice complete. A workflow described in a configuration directory runs end
-> to end — model, condition, capability over MCP, human approval — survives a process restart, and
-> reports itself to any OTLP backend. See [DESIGN.md](DESIGN.md) for the full architecture.
+> to end — model, condition, capability over MCP, human approval, an external event — survives a
+> process restart, and reports itself to any OTLP backend. See [DESIGN.md](DESIGN.md) for the full
+> architecture.
 
 ---
 

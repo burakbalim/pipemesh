@@ -10,8 +10,8 @@ Workflows are versioned JSON artifacts. The runtime compiles them into an execut
 them through pluggable providers, with durable state so an execution survives process restarts.
 
 **Current status:** a workflow described in a configuration directory runs end to end — model,
-condition, capability over MCP, human approval — survives a restart or a crashed process, reports
-itself to any OTLP backend, and is reachable over gRPC from any language.
+condition, capability over MCP, human approval, an external event — survives a restart or a crashed
+process, reports itself to any OTLP backend, and is reachable over gRPC from any language.
 `.claude/contracts/README.md` lists what comes next.
 
 ```

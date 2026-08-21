@@ -79,11 +79,8 @@ class DurableApprovalRestartTest {
     }
 
     @AfterEach
-    void clean() throws Exception {
-        try (var connection = dataSource().getConnection();
-             var statement = connection.createStatement()) {
-            statement.execute("TRUNCATE workflow_step_history, workflow_approval, workflow_execution");
-        }
+    void clean() {
+        TestTables.empty(dataSource());
     }
 
     private DataSource dataSource() {

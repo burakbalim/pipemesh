@@ -77,3 +77,27 @@ CREATE TABLE workflow_approval (
 CREATE INDEX workflow_approval_pending
     ON workflow_approval (execution_id)
     WHERE status = 'PENDING';
+
+-- What an execution is waiting for, and what will find it (§9.7).
+CREATE TABLE workflow_wait (
+    wait_id           TEXT PRIMARY KEY,
+    execution_id      TEXT        NOT NULL REFERENCES workflow_execution (execution_id),
+    step_id           TEXT        NOT NULL,
+    organization_id   TEXT        NOT NULL,
+    event_name        TEXT        NOT NULL,
+    -- The value both sides already know. A publisher has an order number, not an
+    -- execution id, so this is what the two are matched on.
+    correlation       TEXT        NOT NULL,
+    status            TEXT        NOT NULL,
+    waiting_since     TIMESTAMPTZ NOT NULL,
+    expires_at        TIMESTAMPTZ
+);
+
+-- The one lookup that happens on every published event.
+CREATE INDEX workflow_wait_listening
+    ON workflow_wait (organization_id, event_name, correlation)
+    WHERE status = 'WAITING';
+
+CREATE INDEX workflow_wait_expiring
+    ON workflow_wait (expires_at)
+    WHERE status = 'WAITING' AND expires_at IS NOT NULL;
