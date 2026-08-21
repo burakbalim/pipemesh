@@ -29,6 +29,7 @@ import io.pipemesh.proto.v1.WatchExecutionRequest;
 
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Set;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
@@ -198,13 +199,24 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
         // client has no moment it can point at and say "from here I am listening",
         // and anything that happens between asking to watch and being subscribed
         // is lost with no way to notice.
-        runtime.snapshot(executionId).ifPresent(snapshot -> call.onNext(ExecutionUpdate.newBuilder()
+        // Fully qualified: the proto has a message of the same name.
+        Optional<io.pipemesh.core.execution.ExecutionSnapshot> arrival =
+                runtime.snapshot(executionId);
+        arrival.ifPresent(snapshot -> call.onNext(ExecutionUpdate.newBuilder()
                 .setSequence(0)
                 .setAt(WireTypes.toWire(System.currentTimeMillis()))
                 .setStarted(ExecutionStarted.newBuilder()
                         .setExecution(WireTypes.toWire(snapshot))
                         .build())
                 .build()));
+
+        // An execution that is already over will never publish again, so waiting
+        // for its "finished" event means waiting forever. The javadoc above has
+        // always promised otherwise; this is what makes that true.
+        if (arrival.map(snapshot -> snapshot.status().isTerminal()).orElse(true)) {
+            call.onCompleted();
+            return;
+        }
 
         UpdatePump pump = new UpdatePump(call);
         subscription.set(() -> {

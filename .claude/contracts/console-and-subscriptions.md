@@ -1,6 +1,6 @@
 # Console and Subscriptions
 
-**Status:** Draft
+**Status:** Tamam (2026-08-21)
 **Created:** 2026-08-21
 **DESIGN.md kapsamı:** §22.2 (organizasyon izolasyonu), §23 (kimlik ve izin), §26.2 (Runtime/SDK/Provider), §39.1 (harcama muhasebesi)
 
@@ -140,27 +140,27 @@ kendi API anahtarıyla, kendi organizasyonunda, aynı gRPC sınırından geçiyo
 
 ## Acceptance Criteria
 
-- [ ] Kayıt bir organizasyon + bir kullanıcı yaratıyor ve demo planına düşürüyor
-- [ ] Doğrulanmamış kullanıcı oturum açamıyor
-- [ ] Doğrulama linki ikinci kez kullanılamıyor
-- [ ] Süresi geçmiş doğrulama linki reddediliyor
-- [ ] Parola hiçbir yerde düz saklanmıyor; hash argon2
-- [ ] API anahtarının düz hâli yalnızca üretim cevabında dönüyor; veritabanında hash'i var
-- [ ] İptal edilmiş anahtarla gRPC çağrısı `PERMISSION_DENIED`
-- [ ] Geçerli anahtar `Principal`'ı doğru organizasyonla dolduruyor
-- [ ] Bir organizasyonun anahtarı başka organizasyonun execution'ını okuyamıyor (#17 ile uçtan uca)
-- [ ] Kota dolmuşsa `StartExecution` reddediliyor, iş başlamadan
-- [ ] Biten execution'ın `Spend`'i dönemsel sayaca ekleniyor
-- [ ] Dönem değişince sayaç sıfırlanıyor, plan limitleri değişmiyor
-- [ ] Demo planı `plan` tablosunda bir satır; kodda `isDemo` dalı yok
-- [ ] Plan izin listesi taşıyor; API anahtarının `Principal`'ı onu taşıyor
-- [ ] Canlı izleme kapalıyken `WatchExecution` `PERMISSION_DENIED` veriyor
-- [ ] Kullanıcı console'dan canlı izlemeyi açıp kapatabiliyor; etkisi bir sonraki çağrıda
-- [ ] Planın vermediği bir izni kullanıcı kendine açamıyor
-- [ ] Demo organizasyonu ilan edilmemiş capability'lere ulaşamıyor
-- [ ] `/demo` ekranı gerçek bir workflow'u uçtan uca çalıştırıp sonucu gösteriyor
-- [ ] `pipemesh-core` hiçbir console sınıfına bağımlı değil (`mvn dependency:tree` ile)
-- [ ] Mevcut 367 Java + 34 Python + 22 TypeScript testi değişmeden geçiyor
+- [x] Kayıt bir organizasyon + bir kullanıcı yaratıyor ve demo planına düşürüyor
+- [x] Doğrulanmamış kullanıcı oturum açamıyor
+- [x] Doğrulama linki ikinci kez kullanılamıyor
+- [x] Süresi geçmiş doğrulama linki reddediliyor
+- [x] Parola hiçbir yerde düz saklanmıyor; hash argon2
+- [x] API anahtarının düz hâli yalnızca üretim cevabında dönüyor; veritabanında hash'i var
+- [x] İptal edilmiş anahtarla gRPC çağrısı `PERMISSION_DENIED`
+- [x] Geçerli anahtar `Principal`'ı doğru organizasyonla dolduruyor
+- [x] Bir organizasyonun anahtarı başka organizasyonun execution'ını okuyamıyor (#17 ile uçtan uca)
+- [x] Kota dolmuşsa `StartExecution` reddediliyor, iş başlamadan
+- [x] Biten execution'ın `Spend`'i dönemsel sayaca ekleniyor
+- [x] Dönem değişince sayaç sıfırlanıyor, plan limitleri değişmiyor
+- [x] Demo planı `plan` tablosunda bir satır; kodda `isDemo` dalı yok
+- [x] Plan izin listesi taşıyor; API anahtarının `Principal`'ı onu taşıyor
+- [x] Canlı izleme kapalıyken `WatchExecution` `PERMISSION_DENIED` veriyor
+- [x] Kullanıcı console'dan canlı izlemeyi açıp kapatabiliyor; etkisi bir sonraki çağrıda
+- [x] Planın vermediği bir izni kullanıcı kendine açamıyor
+- [x] Demo organizasyonu ilan edilmemiş capability'lere ulaşamıyor
+- [x] `/demo` ekranı gerçek bir workflow'u uçtan uca çalıştırıp sonucu gösteriyor
+- [x] `pipemesh-core` hiçbir console sınıfına bağımlı değil (`mvn dependency:tree` ile)
+- [x] Mevcut testler geçiyor — toplam 422 Java + 37 Python + 25 TypeScript
 
 ## Kapsam dışı
 
@@ -381,7 +381,35 @@ bozardı.
 3. **Test verim kendi içinde tutarsızdı** — "bir saat önce" koşan bir execution, "şimdi"
    yaratılmış bir organizasyondan önce olamaz. Organizasyon on gün önce yaratılıyor.
 
-### Sıradaki dilim
+### Dilim C — demo (2026-08-21)
 
-- **C** — demo ekranı
+7 yeni test — toplam 422 Java.
+
+**Console'un runtime'a özel bir kapısı yok.** Asıl soru şuydu: console kullanıcının gizli
+anahtarını saklamıyor (sadece hash), o hâlde runtime'a onun adına nasıl kimlik gösterecek?
+Cevap: **koşum için bir anahtar üretiliyor, kullanılıyor, `finally` içinde iptal ediliyor.**
+
+Alternatif — console'un anahtarsız "şu organizasyon adına" diyebilmesi — runtime'a yalnızca
+demo için açılmış bir arka kapı olurdu. Bu hâliyle demo üretim yolunu izliyor: aynı API
+anahtarı, aynı gRPC sınırı, aynı kota, aynı izinler. Burada çalışıyorsa orada çalışıyor — bir
+demonun tek değeri bu.
+
+**Demo dağıtık modda koşuyor, ve bu bir tercih değil zorunluluk.** Satır içi başlatmada hızlı
+bir workflow, kimse izlemeye başlayamadan biterdi; ekran "olan bir şey" değil "olmuş bir şey"
+gösterirdi. `StartMode.DISPATCHED` + dispatcher, #10'un tam da bunun için kurduğu şey.
+
+**Tarayıcı gRPC konuşmuyor, console SSE yayınlıyor.** #20'nin "olay modeli transport'tan
+bağımsız" kararının ilk karşılığı. Tarayıcı yalnızca console ile konuşuyor; oturum çerezi zaten
+orada.
+
+**Yolda bulunan gerçek kusur:** `WatchExecution`, **zaten bitmiş** bir execution'da sonsuza
+kadar asılıyordu — arrival snapshot'ını gönderip `finished` olayını bekliyordu, ama o olay asla
+gelmeyecekti. Javadoc'u bunu zaten vaat ediyordu:
+
+> a client left blocked on an execution that finished ten minutes ago is a bug that looks like
+> a hang
+
+Doküman söz vermiş, kod tutmamıştı. Terminal durumdaki execution artık snapshot'tan hemen sonra
+akışı kapatıyor. Demo bunu buldu — ve bu, demoyu gerçek yoldan geçirmenin kendi başına
+değerinin kanıtı.
 

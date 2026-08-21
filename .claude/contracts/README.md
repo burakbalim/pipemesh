@@ -33,7 +33,7 @@ onunla çelişmez.
 | 16b | [json-schemas.md](json-schemas.md) | §23.1'in şema seviyesindeki karşılığı — kapalı step şemaları | **Tamam** (2026-08-21) |
 | 17 | [multi-tenancy.md](multi-tenancy.md) | §22.2 organizasyon izolasyonu — okuma ve ilerletme sınırı | **Tamam** (2026-08-21) |
 | 18 | _otel-exporter_ | §22.1 `pipemesh-opentelemetry` — OTLP üzerinden Datadog/New Relic/Grafana | **Tamam** (2026-08-20) |
-| 19 | [console-and-subscriptions.md](console-and-subscriptions.md) | Ürün katmanı — organizasyon kaydı, plan/kota, web UI, demo | Aşama 0 tamam |
+| 19 | [console-and-subscriptions.md](console-and-subscriptions.md) | Ürün katmanı — organizasyon kaydı, plan/kota, web UI, demo | **Tamam** (2026-08-21) |
 | 20 | [streaming-progress.md](streaming-progress.md) | §30.1 — `step.started`, `execution.recovered`, akış filtresi ve izni | **Tamam** (2026-08-21) |
 
 Faz eşlemesi için DESIGN.md §45'e bakın: #1 Phase 1'i, #2–4 Phase 2'yi, #6–7 Phase 3'ü,
