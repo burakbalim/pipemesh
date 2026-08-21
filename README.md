@@ -116,7 +116,9 @@ Provider  →  how the runtime reaches the outside world
 ```
 
 LangChain, OpenAI, MCP and managed agent platforms are all *providers* — optional adapters, never
-dependencies of the core.
+dependencies of the core. The LangChain adapter does not even depend on LangChain: it takes
+anything with an `invoke()` method, and a chain reaches the runtime over the same worker
+connection any other application code uses.
 
 ## Deployment
 

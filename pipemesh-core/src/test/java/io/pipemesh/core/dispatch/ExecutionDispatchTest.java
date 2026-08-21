@@ -123,6 +123,14 @@ class ExecutionDispatchTest {
     }
 
     @Test
+    void aClaimedExecutionIsStillOwnedWhileItIsBeingDriven() {
+        enqueue(REVIEW, "review");
+        first.dispatchOnce();
+
+        assertEquals(0, leases.claim("pod-b", Duration.ofMinutes(5), 10).size());
+    }
+
+    @Test
     void aClaimedExecutionIsInvisibleToTheNextRound() {
         enqueue(REVIEW, "review");
         first.dispatchOnce();
@@ -130,26 +138,34 @@ class ExecutionDispatchTest {
         assertEquals(0, first.dispatchOnce(), "already mine is not free");
     }
 
+    /**
+     * Lease lifetime is asked of the leases directly, not through
+     * {@code dispatchOnce}: that also drives, and an execution driven to WAITING
+     * stops being claimable for a reason that has nothing to do with the lease.
+     * Going through the dispatcher here would make the test a race.
+     */
     @Test
     void anExpiredLeaseIsClaimableAgain() {
         enqueue(REVIEW, "review");
-        assertEquals(1, first.dispatchOnce());
+        assertEquals(1, leases.claim("pod-a", Duration.ofMinutes(5), 10).size());
 
         clock.advance(Duration.ofMinutes(6));
 
-        assertEquals(1, second.dispatchOnce(), "nobody renewed it");
+        assertEquals(1, leases.claim("pod-b", Duration.ofMinutes(5), 10).size(),
+                "nobody renewed it");
     }
 
     @Test
     void aRenewedLeaseIsNotStolen() {
         enqueue(REVIEW, "review");
-        first.dispatchOnce();
+        var held = leases.claim("pod-a", Duration.ofMinutes(5), 10);
 
         clock.advance(Duration.ofMinutes(4));
-        assertEquals(1, first.renewAll());
+        assertTrue(leases.renew(held.get(0), Duration.ofMinutes(5)).isPresent());
         clock.advance(Duration.ofMinutes(4));
 
-        assertEquals(0, second.dispatchOnce(), "still being worked on");
+        assertEquals(0, leases.claim("pod-b", Duration.ofMinutes(5), 10).size(),
+                "still being worked on");
     }
 
     @Test
@@ -186,7 +202,8 @@ class ExecutionDispatchTest {
 
         clock.advance(Duration.ofMinutes(6));
 
-        assertEquals(0, second.dispatchOnce(), "waiting is not stuck");
+        assertEquals(0, leases.claim("pod-b", Duration.ofMinutes(5), 10).size(),
+                "waiting is not stuck");
     }
 
     @Test
@@ -217,7 +234,7 @@ class ExecutionDispatchTest {
         first.dispatchOnce();
 
         clock.advance(Duration.ofMinutes(6));
-        assertEquals(1, second.dispatchOnce(), "taken over");
+        assertEquals(1, leases.claim("pod-b", Duration.ofMinutes(5), 10).size(), "taken over");
 
         assertEquals(0, first.renewAll(), "the old owner has nothing left to renew");
     }

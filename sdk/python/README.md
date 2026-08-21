@@ -43,6 +43,29 @@ except PipeMeshError as failure:
 The status code is kept because the useful question after a failure is whether it was this caller's
 mistake or the server's, and the answer decides whether retrying makes sense.
 
+## Serving a LangChain chain
+
+A chain reaches the runtime the same way any other application code does — over the worker
+connection — so a workflow calls it as a plain capability and never learns what is behind it:
+
+```python
+from pipemesh import PipeMeshWorker
+from pipemesh.langchain import serve
+
+worker = PipeMeshWorker("localhost:8080", organization="acme")
+serve(worker, "summarize", summarize_chain, field="article")
+worker.run()
+```
+
+```json
+{"type": "capability", "capability": "summarize", "input": "$.article", "output": "summary"}
+```
+
+`pipemesh.langchain` does not import `langchain`. It accepts anything with an `invoke()` method,
+which is what LangChain's `Runnable` and `BaseTool` both have — the ecosystem is worth reaching,
+the dependency is not worth taking (DESIGN.md §35). `field` names which part of the input to hand
+the chain; left out, the chain gets the whole object.
+
 ## Regenerating the stubs
 
 The generated modules are committed so that installing this package needs no protoc. Regenerate

@@ -2163,6 +2163,44 @@ depends on it:
 
 The ecosystem is worth reaching; the dependency is not worth taking.
 
+## 35.1 Where the adapter actually lives, and why it is so small
+
+The diagram above puts `pipemesh-langchain` beside the OpenAI and MCP adapters, which are Java
+modules. LangChain is a Python library. The Java-side thing with a similar name is LangChain4j — a
+different project and a separate decision — so the LangChain adapter lives in the Python SDK. That
+is not a compromise but a consequence of §26.2: a provider is where the runtime reaches outward,
+and the way to reach something in Python is the worker connection the SDK already opens (§26.1).
+
+**It needed no new protocol.** A LangChain chain is already reachable as a capability. The adapter
+is translation and nothing else — connection, retry, registration and shutdown all come from the
+worker unchanged:
+
+```python
+worker = PipeMeshWorker("localhost:8080", organization="acme")
+serve(worker, "summarize", summarize_chain, field="article")
+worker.run()
+```
+
+```json
+{"type": "capability", "capability": "summarize", "input": "$.article", "output": "summary"}
+```
+
+That an adapter for a whole ecosystem is this small is the evidence that the abstraction sits in
+the right place. The alternative — a new RPC per ecosystem — would mean the abstraction was never
+the capability, only a special case per vendor.
+
+**The adapter does not import LangChain either.** It accepts anything with an `invoke()` method,
+which `Runnable` and `BaseTool` both have. If the sentence above is worth saying about the core, it
+is worth honouring in the adapter. The cost is real and stated: a change to LangChain's `invoke`
+contract surfaces at run time rather than at import time — so the shape is checked when a runnable
+is registered, not on the first call.
+
+**A LangChain model cannot back an `llm` step**, and that limit is structural rather than
+temporary: the proto has an inbound path for capabilities and none for models. Whether it should is
+a separate question — a model one hop away puts cost accounting (§39.1) and token streaming (§30)
+behind that hop. A LangChain *chain* is application logic, and behind a capability is where
+application logic belongs.
+
 ---
 
 # 36. Comparison With Existing Systems

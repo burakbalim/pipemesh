@@ -28,7 +28,7 @@ onunla çelişmez.
 | 13a | [python-sdk.md](python-sdk.md) | Python client — proto'dan üretilen stub'lar + ince sarmalayıcı | **Tamam** (2026-08-20) |
 | 13b | [typescript-sdk.md](typescript-sdk.md) | TypeScript client — aynı proto, `@grpc/proto-loader` | **Tamam** (2026-08-20) |
 | 14 | [application-capabilities.md](application-capabilities.md) | SDK worker'ları (`CapabilityWorker.Connect`), business code sınırı | **Tamam** (2026-08-20) |
-| 15 | _langchain-adapter_ | §35 opsiyonel LangChain provider'ı (`pipemesh-langchain`) | Planlanan |
+| 15 | [langchain-adapter.md](langchain-adapter.md) | §35.1 — Python SDK'sında adaptör; yeni protokol gerekmedi | **Tamam** (2026-08-21) |
 | 16 | [agent-loop.md](agent-loop.md) | §9.9 sınırlı agent step'i — ilan edilmiş capability'ler, zorunlu sınır | **Tamam** (2026-08-21) |
 | 16b | [json-schemas.md](json-schemas.md) | §23.1'in şema seviyesindeki karşılığı — kapalı step şemaları | **Tamam** (2026-08-21) |
 | 17 | [multi-tenancy.md](multi-tenancy.md) | §22.2 organizasyon izolasyonu — okuma ve ilerletme sınırı | **Tamam** (2026-08-21) |

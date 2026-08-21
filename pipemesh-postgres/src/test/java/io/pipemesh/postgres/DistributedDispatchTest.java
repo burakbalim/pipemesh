@@ -158,31 +158,39 @@ class DistributedDispatchTest {
         assertEquals(1, taken, "SKIP LOCKED means one of them steps over it");
     }
 
+    /**
+     * Lease lifetime is asked of the leases directly. {@code dispatchOnce} also
+     * drives, and an execution driven to WAITING stops being claimable for a
+     * reason that has nothing to do with its lease — asking through the
+     * dispatcher would make this a race rather than a test.
+     */
     @Test
     void aClaimTakenByAProcessThatDiedIsPickedUpWhenItExpires() {
         Instance died = boot("pod-a");
         enqueue(died, "review");
-        assertEquals(1, died.dispatcher().dispatchOnce());
+        assertEquals(1, died.leases().claim("pod-a", Duration.ofMinutes(5), 10).size());
 
         Instance survivor = boot("pod-b");
-        assertEquals(0, survivor.dispatcher().dispatchOnce(), "still owned");
+        assertEquals(0, survivor.leases().claim("pod-b", Duration.ofMinutes(5), 10).size(),
+                "still owned");
 
         clock.advance(Duration.ofMinutes(6));
 
-        assertEquals(1, survivor.dispatcher().dispatchOnce(), "nobody renewed it");
+        assertEquals(1, survivor.leases().claim("pod-b", Duration.ofMinutes(5), 10).size(),
+                "nobody renewed it");
     }
 
     @Test
     void aRenewedClaimIsNotTakenOver() {
         Instance holder = boot("pod-a");
         enqueue(holder, "review");
-        holder.dispatcher().dispatchOnce();
+        List<ExecutionLease> held = holder.leases().claim("pod-a", Duration.ofMinutes(5), 10);
 
         clock.advance(Duration.ofMinutes(4));
-        assertEquals(1, holder.dispatcher().renewAll());
+        assertEquals(1, holder.leases().renew(held.get(0), Duration.ofMinutes(5)).stream().count());
         clock.advance(Duration.ofMinutes(4));
 
-        assertEquals(0, boot("pod-b").dispatcher().dispatchOnce());
+        assertEquals(0, boot("pod-b").leases().claim("pod-b", Duration.ofMinutes(5), 10).size());
     }
 
     @Test
@@ -222,7 +230,8 @@ class DistributedDispatchTest {
 
         clock.advance(Duration.ofMinutes(6));
 
-        assertEquals(0, boot("pod-b").dispatcher().dispatchOnce(), "waiting is not stuck");
+        assertEquals(0, boot("pod-b").leases().claim("pod-b", Duration.ofMinutes(5), 10).size(),
+                "waiting is not stuck");
     }
 
     @Test

@@ -116,6 +116,10 @@ passes the tests — say so rather than accepting it.
 - **Runtime / SDK / Provider stay separate.** The runtime is the engine, an SDK is access to it, a
   provider is how it reaches the outside world. LangChain, OpenAI, MCP and managed agent platforms
   are all providers — optional adapters, never core dependencies (§26.2, §35).
+- **An adapter does not take the dependency either.** `pipemesh.langchain` accepts anything with an
+  `invoke()` method and never imports LangChain; a test reads its source to keep it that way. If a
+  new ecosystem needs a new RPC to be reachable, the abstraction is in the wrong place — a chain
+  reaches the runtime through the worker connection that already exists (§35.1).
 - **One way to reach a capability.** Both the capability step and the agent step go through
   `CapabilityInvoker`, so permissions, idempotency and telemetry live in one place. A second route
   would be a way around the permission check, and a boundary with two doors is not one.
