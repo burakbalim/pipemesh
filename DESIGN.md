@@ -1968,6 +1968,35 @@ waiting for something already over. Sequence numbers are assigned before filteri
 watcher sees gaps — and a gap says "not for you", which is what keeps filtering distinguishable
 from loss.
 
+## 30.2 Updates across processes
+
+A broker holding watchers in memory is correct while there is one process and a silent failure
+the moment there are two: a watch lands on the replica the client happened to reach, the
+execution runs on the one that claimed it (§28.1), and the stream says nothing at all — which
+§30.1 already establishes is indistinguishable from a workflow that is thinking.
+
+Updates therefore travel over PostgreSQL `LISTEN/NOTIFY`. The database is already shared, so
+this needs nothing new to operate; Redis, NATS or Kafka would each be a third thing to run for a
+job Postgres does adequately at this size, and `UpdateChannel` is where one of them plugs in when
+that stops being true.
+
+**Local delivery stays.** A process serves its own watchers directly and publishes alongside,
+rather than routing everything through the database. Two reasons: a runtime without a database
+still has to work, and a single node should not pay a round trip to talk to itself. A publisher
+ignores its own notifications, or every stream would double.
+
+**A sequence number describes a stream, not an execution.** Whichever process serves a watcher
+numbers what it sends it. Two processes cannot share a counter without sharing a lock, and a
+client only ever reads one of them — so the numbers are monotonic within a stream, gaps still
+mean "filtered, not lost" (§30.1), and `from_sequence` stays unimplemented rather than
+half-true.
+
+**Two properties are inherited from `NOTIFY` and are not regressions.** It is not durable, so a
+process that is not listening misses what happened — exactly what the in-memory broker has always
+done. And its payload is limited, so an update too large to carry is replaced by a marker saying
+something happened, rather than dropped: the watcher loses the detail and does not lose the
+event.
+
 **Whether an organization may watch at all is a deployment's decision**, expressed as a
 permission the caller either holds or does not (§23). No new mechanism: the same permission set
 `CapabilityInvoker` already reads, with a second reader. It is off by default, because demanding

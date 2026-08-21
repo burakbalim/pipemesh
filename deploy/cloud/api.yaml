@@ -1,0 +1,55 @@
+# Serves callers. Drives nothing.
+#
+# Two variables say that, not one: PIPEMESH_DISPATCH=off stops the driver loop,
+# and PIPEMESH_START=dispatched stops start() from driving on the caller's
+# thread. Without the second, this replica would quietly do the dispatcher's job.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pipemesh-api
+  namespace: pipemesh
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: pipemesh-api}
+  template:
+    metadata:
+      labels: {app: pipemesh-api}
+    spec:
+      containers:
+        - name: runtime
+          image: pipemesh/runtime:0.1.0
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: pipemesh
+          env:
+            - name: PIPEMESH_CONFIG
+              value: /etc/pipemesh
+            - name: PIPEMESH_DISPATCH
+              value: "off"
+            - name: PIPEMESH_START
+              value: dispatched
+          volumeMounts:
+            - name: workflows
+              mountPath: /etc/pipemesh
+              readOnly: true
+          resources:
+            requests: {cpu: 100m, memory: 512Mi}
+            limits: {memory: 1Gi}
+      volumes:
+        - name: workflows
+          configMap:
+            name: pipemesh-workflows
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pipemesh-api
+  namespace: pipemesh
+spec:
+  selector: {app: pipemesh-api}
+  ports:
+    - port: 8080
+      targetPort: 8080

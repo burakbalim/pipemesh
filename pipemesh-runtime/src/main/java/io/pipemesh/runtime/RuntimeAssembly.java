@@ -75,6 +75,8 @@ public final class RuntimeAssembly implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(RuntimeAssembly.class);
 
     private final PipeMeshServer server;
+    private final ExecutionUpdateBroker broker;
+    private final PostgresUpdateChannel channel;
     private final RecoveryScheduler recovery;
     private final ExecutionDispatcher dispatcher;
     private final RecoveryScheduler dispatching;
@@ -86,6 +88,12 @@ public final class RuntimeAssembly implements AutoCloseable {
     private RuntimeAssembly(RuntimeSettings settings) throws IOException {
         DataSource dataSource = dataSourceOf(settings);
         announce(settings);
+
+        // Migrated here rather than by whoever assembles: a runtime that only
+        // has its tables when somebody remembered to ask is a runtime that will
+        // one day start without them. Idempotent and lock-protected, so calling
+        // it again — from a job, from another replica — costs nothing.
+        migrate(settings);
 
         StateStore stateStore = dataSource == null
                 ? new InMemoryStateStore() : new PostgresStateStore(dataSource);
@@ -101,7 +109,13 @@ public final class RuntimeAssembly implements AutoCloseable {
         CapabilityRegistry capabilities = config.capabilityRegistry();
 
         WorkerRegistry workers = new WorkerRegistry();
-        ExecutionUpdateBroker broker = new ExecutionUpdateBroker();
+
+        // With a database, updates cross processes; without one there is only
+        // this process, and a channel would have nothing to carry them over.
+        this.channel = dataSource == null ? null : new PostgresUpdateChannel(dataSource);
+        ExecutionUpdateBroker broker = channel == null
+                ? new ExecutionUpdateBroker() : new ExecutionUpdateBroker(channel);
+        this.broker = broker;
 
         // Tied with a reference rather than an order nobody can follow: a parallel
         // step runs other steps, so it needs the set it is part of.
@@ -153,7 +167,7 @@ public final class RuntimeAssembly implements AutoCloseable {
         this.server = new PipeMeshServer(
                 new DefaultWorkflowRuntime(
                         workflows, stateStore, executor, intents,
-                        settings.dispatching() ? StartMode.DISPATCHED : StartMode.INLINE),
+                        settings.startsInline() ? StartMode.INLINE : StartMode.DISPATCHED),
                 broker, settings.port(), null, workers);
     }
 
@@ -178,9 +192,11 @@ public final class RuntimeAssembly implements AutoCloseable {
     /**
      * Applies the schema this runtime needs.
      *
-     * <p>Serialised with an advisory lock, so several replicas starting together
-     * do not race each other into the same CREATE TABLE. Nothing about a single
-     * node needs it; every deploy of more than one does.
+     * <p>Called on assembly, and public so a deployment can run it as its own
+     * step instead ({@code --migrate-only}). Serialised with an advisory lock, so
+     * several replicas starting together do not race each other into the same
+     * CREATE TABLE — nothing about a single node needs that; every deploy of more
+     * than one does.
      */
     public static void migrate(RuntimeSettings settings) {
         DataSource dataSource = dataSourceOf(settings);
@@ -206,11 +222,14 @@ public final class RuntimeAssembly implements AutoCloseable {
                 + " organizations are not isolated from one another. This is expected for a"
                 + " single-tenant deployment.");
 
-        if (settings.dispatching()) {
-            log.info("Dispatching is on: this process both serves callers and drives executions");
-        } else {
-            log.info("Dispatching is off ({}=off): this process serves callers only, and"
-                    + " something else must drive executions", RuntimeSettings.DISPATCH);
+        log.info("Dispatching is {}; start is {}", settings.dispatching() ? "on" : "off",
+                settings.startsInline() ? "inline" : "dispatched");
+
+        if (!settings.dispatching() && settings.startsInline()) {
+            log.info("This process drives what it is asked to, on the caller's thread");
+        } else if (!settings.dispatching()) {
+            log.info("This process serves callers only: something else must drive executions"
+                    + " ({}=off, {}=dispatched)", RuntimeSettings.DISPATCH, RuntimeSettings.START);
         }
     }
 
@@ -260,5 +279,9 @@ public final class RuntimeAssembly implements AutoCloseable {
         }
         recovery.close();
         server.close();
+        broker.close();
+        if (channel != null) {
+            channel.close();
+        }
     }
 }

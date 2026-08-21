@@ -24,8 +24,9 @@ public final class RuntimeMain {
 
     /**
      * Applies the schema and exits, for a deployment that migrates as its own
-     * step rather than on the way up. Startup migration stays safe either way —
-     * the advisory lock makes both orders correct.
+     * step rather than on the way up. Assembly migrates anyway, and the advisory
+     * lock makes every order correct — this exists so a deployment can put the
+     * schema change where it wants it, not because it has to.
      */
     private static final String MIGRATE_ONLY = "--migrate-only";
 
@@ -37,7 +38,6 @@ public final class RuntimeMain {
             return;
         }
 
-        RuntimeAssembly.migrate(settings);
         try (RuntimeAssembly runtime = RuntimeAssembly.of(settings).start()) {
             runtime.awaitTermination();
         } catch (Exception failure) {

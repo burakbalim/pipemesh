@@ -1,0 +1,47 @@
+# TLS ends here.
+#
+# Pods speak plaintext inside the cluster. Certificates in the application would
+# hand every pod a renewal to get wrong, and the runtime has no business knowing
+# what a certificate is.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pipemesh
+  namespace: pipemesh
+  annotations:
+    # gRPC to the api service; the console is ordinary HTTP.
+    nginx.ingress.kubernetes.io/backend-protocol: GRPC
+spec:
+  tls:
+    - hosts: [api.example.com]
+      secretName: pipemesh-api-tls
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pipemesh-api
+                port: {number: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pipemesh-console
+  namespace: pipemesh
+spec:
+  tls:
+    - hosts: [console.example.com]
+      secretName: pipemesh-console-tls
+  rules:
+    - host: console.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pipemesh-console
+                port: {number: 8090}

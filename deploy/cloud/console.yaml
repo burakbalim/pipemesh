@@ -1,0 +1,53 @@
+# Identity, plans, quota and the screens.
+#
+# console.cloud=true turns on the checks that only matter when other people can
+# reach this: it refuses to start if verification links would go to the log.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pipemesh-console
+  namespace: pipemesh
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: pipemesh-console}
+  template:
+    metadata:
+      labels: {app: pipemesh-console}
+    spec:
+      containers:
+        - name: console
+          image: pipemesh/console:0.1.0
+          ports:
+            - containerPort: 8090
+          envFrom:
+            - secretRef:
+                name: pipemesh
+          env:
+            - name: CONSOLE_CLOUD
+              value: "true"
+            - name: CONSOLE_DB_URL
+              value: $(PIPEMESH_DB_URL)
+            - name: CONSOLE_DB_USER
+              value: $(PIPEMESH_DB_USER)
+            - name: CONSOLE_DB_PASSWORD
+              value: $(PIPEMESH_DB_PASSWORD)
+            # The runtime, reached the way any client reaches it.
+            - name: CONSOLE_RUNTIME_TARGET
+              value: pipemesh-api:8080
+            - name: CONSOLE_BASE_URL
+              value: https://console.example.com
+          resources:
+            requests: {cpu: 100m, memory: 512Mi}
+            limits: {memory: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pipemesh-console
+  namespace: pipemesh
+spec:
+  selector: {app: pipemesh-console}
+  ports:
+    - port: 8090
+      targetPort: 8090

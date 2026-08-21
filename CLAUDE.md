@@ -193,6 +193,9 @@ passes the tests — say so rather than accepting it.
 - **Scoring quality is the application's job, not the runtime's.** Evaluation is a capability and a
   condition, not a step type. A runtime holding a quality threshold has started deciding what
   "good" means (§3, §39.2).
+- **A sequence number belongs to a stream, not to an execution.** Whichever process serves a
+  watcher numbers what it sends. Sharing a counter across processes would mean sharing a lock,
+  and no client reads more than one stream (§30.2).
 - **An event may only claim what durable state can corroborate.** A step start is fine — the
   record already says the execution stands there. Anything happening *inside* a step is not: after
   a crash and a replay, the client would be the only one who ever believed it. Tokens are the

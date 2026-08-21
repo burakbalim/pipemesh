@@ -1,0 +1,33 @@
+# The schema as its own step.
+#
+# Assembly migrates anyway and an advisory lock makes every order safe, so this
+# is not a prerequisite — it exists so a deployment can put the schema change
+# where it can see it, before any application pod rolls.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pipemesh-migrate
+  namespace: pipemesh
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: pipemesh/runtime:0.1.0
+          args: ["--migrate-only"]
+          envFrom:
+            - secretRef:
+                name: pipemesh
+          env:
+            - name: PIPEMESH_CONFIG
+              value: /etc/pipemesh
+          volumeMounts:
+            - name: workflows
+              mountPath: /etc/pipemesh
+              readOnly: true
+      volumes:
+        - name: workflows
+          configMap:
+            name: pipemesh-workflows

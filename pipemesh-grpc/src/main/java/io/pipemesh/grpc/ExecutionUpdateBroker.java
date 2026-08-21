@@ -20,6 +20,7 @@ import io.pipemesh.proto.v1.TokenChunk;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -41,7 +42,7 @@ import java.util.function.Consumer;
  * updates and deciding how long to keep them — a decision worth making
  * deliberately rather than as a side effect of adding a stream.
  */
-public final class ExecutionUpdateBroker implements ExecutionObserver {
+public final class ExecutionUpdateBroker implements ExecutionObserver, AutoCloseable {
 
     /**
      * One subscription and what it declined.
@@ -59,6 +60,34 @@ public final class ExecutionUpdateBroker implements ExecutionObserver {
 
     private final Map<ExecutionId, List<Watcher>> watchers = new ConcurrentHashMap<>();
     private final Map<ExecutionId, AtomicLong> sequences = new ConcurrentHashMap<>();
+    private final UpdateChannel channel;
+    private final AutoCloseable subscription;
+
+    public ExecutionUpdateBroker() {
+        this(UpdateChannel.NONE);
+    }
+
+    /**
+     * @param channel how updates reach other processes. {@link UpdateChannel#NONE}
+     *                — the default — keeps everything local, which is correct
+     *                while there is one process and wrong the moment there are
+     *                two (§30.1).
+     */
+    public ExecutionUpdateBroker(UpdateChannel channel) {
+        this.channel = Objects.requireNonNull(channel, "update channel");
+        // Arriving updates go to local watchers and are not published again;
+        // republishing what you were told is how a message loop starts.
+        this.subscription = channel.subscribe(this::toLocalWatchers);
+    }
+
+    @Override
+    public void close() {
+        try {
+            subscription.close();
+        } catch (Exception ignored) {
+            // Nothing a caller can do about a listener that will not let go.
+        }
+    }
 
     /** @return a handle that stops the subscription; a watcher that goes away must call it */
     public AutoCloseable watch(ExecutionId executionId, Consumer<ExecutionUpdate> onUpdate) {
@@ -160,23 +189,55 @@ public final class ExecutionUpdateBroker implements ExecutionObserver {
     private void deliver(
             ExecutionId executionId, UpdateKind kind, Consumer<ExecutionUpdate.Builder> fill) {
 
+        ExecutionUpdate.Builder builder = ExecutionUpdate.newBuilder()
+                .setAt(WireTypes.toWire(System.currentTimeMillis()));
+        fill.accept(builder);
+        ExecutionUpdate update = builder.build();
+
+        // Published even when nobody here is watching: the watcher may be on
+        // another process entirely, which is the whole point of a channel.
+        channel.publish(executionId, update);
+        toLocalWatchers(executionId, update);
+    }
+
+    /**
+     * Hands an update to this process's own watchers, numbering it as it goes.
+     *
+     * <p>The number comes from here rather than from whoever produced the update,
+     * because a sequence describes one stream. Numbered before filtering, so a
+     * filtered watcher sees gaps — and a gap says "not for you", which is what
+     * tells filtering apart from loss.
+     */
+    private void toLocalWatchers(ExecutionId executionId, ExecutionUpdate update) {
         List<Watcher> subscribers = watchers.get(executionId);
         if (subscribers == null || subscribers.isEmpty()) {
             return;
         }
 
-        // Numbered before filtering, so every watcher agrees on what update 7 was.
-        // A filtered watcher sees gaps, and a gap says "not for you" — which is
-        // what a client needs to tell filtering apart from loss.
-        ExecutionUpdate.Builder builder = ExecutionUpdate.newBuilder()
+        UpdateKind kind = kindOf(update);
+        ExecutionUpdate numbered = update.toBuilder()
                 .setSequence(sequences.computeIfAbsent(executionId, id -> new AtomicLong())
                         .incrementAndGet())
-                .setAt(WireTypes.toWire(System.currentTimeMillis()));
-        fill.accept(builder);
+                .build();
 
-        ExecutionUpdate update = builder.build();
         subscribers.stream()
                 .filter(subscriber -> subscriber.wants(kind))
-                .forEach(subscriber -> subscriber.onUpdate().accept(update));
+                .forEach(subscriber -> subscriber.onUpdate().accept(numbered));
+    }
+
+    /**
+     * Which filter group an update belongs to, read from the update itself.
+     *
+     * <p>Derived rather than carried, so the rule is the same on the process that
+     * produced it and the one serving a watcher. Anything not named here cannot
+     * be declined: execution status is what a watcher came for, and a stream that
+     * could omit "finished" would leave a client waiting for something over.
+     */
+    private static UpdateKind kindOf(ExecutionUpdate update) {
+        return switch (update.getUpdateCase()) {
+            case TOKEN -> UpdateKind.UPDATE_KIND_TOKEN;
+            case STEP_STARTED -> UpdateKind.UPDATE_KIND_PROGRESS;
+            default -> null;
+        };
     }
 }
