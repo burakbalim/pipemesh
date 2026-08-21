@@ -53,6 +53,20 @@ public interface StepExecutor {
     }
 
     /**
+     * Anything wrong with this step that its own schema cannot express.
+     *
+     * <p>The schema (see {@link #configSchema}) says which fields exist and what
+     * type they are, deliberately narrowly (§23.1). A rule between two fields —
+     * "if this one is a path, that one is required" — has no home there, and the
+     * compiler cannot check it without learning what the step type means. So the
+     * executor that owns the type answers, in the compiler's own currency: a list
+     * of problems, empty when there are none.
+     */
+    default List<String> validate(Step step) {
+        return List.of();
+    }
+
+    /**
      * Which models this step could call.
      *
      * <p>Asked at compile time, so a workflow with a money budget can be refused

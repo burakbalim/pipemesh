@@ -174,6 +174,13 @@ passes the tests — say so rather than accepting it.
   unpriced model is not a free one: a workflow with a money budget is refused one at compile time
   (§39.1).
 - **Money is never a floating-point number.** Integer micros, rounded once at the end.
+- **Whatever chooses may only choose from what the workflow declared.** An agent picks among the
+  step's declared capabilities; a step that reads its model from a variable picks among its
+  declared `models`. Unresolvable means the step fails — never a silent default, which would hide
+  what actually ran (§9.9, §39.2).
+- **Scoring quality is the application's job, not the runtime's.** Evaluation is a capability and a
+  condition, not a step type. A runtime holding a quality threshold has started deciding what
+  "good" means (§3, §39.2).
 - **An observer must never fail an execution.** Whatever it throws is contained. Telemetry going
   dark is a bad day; telemetry taking a workflow down is an outage.
 

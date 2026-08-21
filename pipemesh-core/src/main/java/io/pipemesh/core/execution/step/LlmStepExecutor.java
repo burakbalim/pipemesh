@@ -12,6 +12,7 @@ import io.pipemesh.core.observability.TokenEvent;
 import io.pipemesh.core.model.CompletionRequest;
 import io.pipemesh.core.model.CompletionResponse;
 import io.pipemesh.core.model.MessagingProvider;
+import io.pipemesh.core.expression.JsonPath;
 import io.pipemesh.core.model.ModelId;
 import io.pipemesh.core.model.ModelRegistry;
 import io.pipemesh.core.prompt.PromptId;
@@ -24,6 +25,7 @@ import io.pipemesh.core.workflow.Step;
 import io.pipemesh.core.workflow.StepId;
 import io.pipemesh.core.workflow.StepType;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -50,6 +52,7 @@ public final class LlmStepExecutor implements StepExecutor {
             {
               "properties": {
                 "model":        {"type": "string"},
+                "models":       {"type": "array", "items": {"type": "string"}},
                 "prompt":       {"type": "string"},
                 "output":       {"type": "string"},
                 "next":         {"type": "string"},
@@ -61,6 +64,8 @@ public final class LlmStepExecutor implements StepExecutor {
             """);
 
     private static final String MODEL = "model";
+    private static final String DECLARED_MODELS = "models";
+    private static final String PATH_PREFIX = "$.";
     private static final String PROMPT = "prompt";
     private static final String OUTPUT = "output";
     private static final String NEXT = "next";
@@ -114,7 +119,13 @@ public final class LlmStepExecutor implements StepExecutor {
     public StepResult execute(Step step, ExecutionContext context) {
         JsonNode config = step.config();
 
-        ModelId model = ModelId.of(required(config, MODEL));
+        ModelId model;
+        try {
+            model = modelFor(config, context);
+        } catch (UndeclaredModelException undeclared) {
+            return new StepResult.Failed(
+                    "llm.model_not_declared", undeclared.getMessage(), false);
+        }
         PromptId promptId = PromptId.of(required(config, PROMPT));
 
         Optional<MessagingProvider> provider = models.providerFor(model);
@@ -208,10 +219,84 @@ public final class LlmStepExecutor implements StepExecutor {
         return declared != null && declared.isTextual() ? declared.asText() : "the declared schema";
     }
 
+    /**
+     * Every model this step could reach: the declared set when the alias is
+     * chosen at run time, otherwise the one it names.
+     *
+     * <p>This is what lets a money budget be checked at compile time (§39.1) —
+     * an unbounded expression would make the question unanswerable, and a
+     * declared set makes it a list.
+     */
     @Override
     public List<ModelId> models(Step step) {
-        String model = step.config().path(MODEL).asText("");
+        JsonNode config = step.config();
+        if (isPath(config.path(MODEL).asText(""))) {
+            return declaredModels(config);
+        }
+        String model = config.path(MODEL).asText("");
         return model.isBlank() ? List.of() : List.of(ModelId.of(model));
+    }
+
+    /**
+     * A step that picks its model at run time must say what it is picking from.
+     *
+     * <p>The same rule the agent step follows for capabilities (§9.9): whatever
+     * chooses may only choose from what the workflow declared. Refused here, at
+     * load time, rather than on the night it resolves to something nobody
+     * expected.
+     */
+    @Override
+    public List<String> validate(Step step) {
+        JsonNode config = step.config();
+        if (!isPath(config.path(MODEL).asText("")) || !declaredModels(config).isEmpty()) {
+            return List.of();
+        }
+        return List.of("chooses its model from '" + config.path(MODEL).asText()
+                + "' but does not declare a 'models' list to choose from");
+    }
+
+    /** An alias written plainly, or one read from a variable at run time. */
+    private ModelId modelFor(JsonNode config, ExecutionContext context) {
+        String declared = required(config, MODEL);
+        if (!isPath(declared)) {
+            return ModelId.of(declared);
+        }
+
+        String chosen = JsonPath.parse(declared).read(context.variables()).asText("");
+        if (chosen.isBlank()) {
+            throw new UndeclaredModelException(
+                    "'" + declared + "' names no model; a step must not fall back to a default"
+                            + " nobody wrote down");
+        }
+        ModelId model = ModelId.of(chosen);
+        if (!declaredModels(config).contains(model)) {
+            throw new UndeclaredModelException(
+                    "'" + declared + "' resolved to '" + chosen + "', which this step did not"
+                            + " declare in 'models'");
+        }
+        return model;
+    }
+
+    private List<ModelId> declaredModels(JsonNode config) {
+        List<ModelId> declared = new ArrayList<>();
+        for (JsonNode model : config.path(DECLARED_MODELS)) {
+            String alias = model.asText("");
+            if (!alias.isBlank()) {
+                declared.add(ModelId.of(alias));
+            }
+        }
+        return List.copyOf(declared);
+    }
+
+    private static boolean isPath(String model) {
+        return model.startsWith(PATH_PREFIX);
+    }
+
+    /** A model the step may not use, which is not the same as one that failed. */
+    private static final class UndeclaredModelException extends RuntimeException {
+        UndeclaredModelException(String message) {
+            super(message);
+        }
     }
 
     @Override

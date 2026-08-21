@@ -2384,6 +2384,54 @@ Evaluation
 Quality Score
 ```
 
+## 39.2 Routing and evaluation, and what each of them actually needs
+
+### Evaluation needs no runtime feature
+
+What counts as a good answer is the application's knowledge. A runtime that holds a quality
+threshold has started doing the application's job, which is the same line §3 draws everywhere else:
+the runtime knows *when* something runs and never *what* it does.
+
+It is already expressible, and the shape is the obvious one — the scorer is a capability, the
+threshold is a condition:
+
+```json
+{"id": "score", "type": "capability", "capability": "grade_answer",
+ "input": "$.answer", "output": "quality", "next": "gate"},
+{"id": "gate", "type": "condition", "expression": "$.quality.score < 0.6",
+ "onTrue": "ask_human", "onFalse": "deliver"}
+```
+
+`EvaluationTest` runs exactly this, so the claim stays checkable rather than becoming a paragraph
+nobody re-reads. A new step type here would buy nothing and would cost the boundary.
+
+### Routing needed one thing: a model chosen at run time
+
+Most of what §39's routing table asks for already worked. An alias points at whichever provider the
+registration says (§12), so a deployment reroutes by editing `models.json`. A step can fall back to
+a different model on failure (§18). A condition can branch to steps that use different aliases.
+
+What was missing is reading the alias from a variable, so an application that has already
+classified the work does not have to fan the workflow out into one branch per model:
+
+```json
+{"id": "answer", "type": "llm", "model": "$.route.model",
+ "models": ["cheap", "reasoning", "local"], "prompt": "ask", "output": "a", "next": "done"}
+```
+
+**The decision stays in the application** — it wrote the variable. The runtime carries out what was
+decided and never answers "is this task simple", because that question is precisely what §3 keeps
+out of the engine.
+
+**A run-time choice must declare what it is choosing from.** `models` is required whenever `model`
+is a path, and an alias outside the declared set is refused. This is the agent step's rule (§9.9)
+applied to models: whatever chooses may only choose from what the workflow declared. It also makes
+the compile-time price check of §39.1 possible at all — an unbounded expression would make "which
+models could this step call" unanswerable, while a declared set makes it a list.
+
+**A route that does not resolve fails the step.** Falling back to a default nobody wrote down would
+make which model ran invisible, which is the opposite of why the field exists.
+
 ### Human-in-the-loop review
 
 ```text

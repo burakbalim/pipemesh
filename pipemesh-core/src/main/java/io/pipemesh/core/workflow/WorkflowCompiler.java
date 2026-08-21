@@ -49,6 +49,7 @@ public final class WorkflowCompiler {
         problems.addAll(unknownStepTypes(steps));
         problems.addAll(danglingEdges(steps, definition.defaults()));
         problems.addAll(unreachableSteps(definition.entry(), steps, definition.defaults()));
+        problems.addAll(stepOwnRules(steps));
         problems.addAll(unpricedModels(definition, steps));
 
         if (!problems.isEmpty()) {
@@ -57,6 +58,17 @@ public final class WorkflowCompiler {
         return new ExecutionGraph(
                 definition.id(), definition.version(), definition.entry(), steps,
                 definition.defaults(), definition.budget());
+    }
+
+    /** Rules only the executor that owns the step type can check. */
+    private List<String> stepOwnRules(Map<StepId, Step> steps) {
+        List<String> problems = new ArrayList<>();
+        for (Step step : steps.values()) {
+            executors.find(step.type()).ifPresent(executor -> executor.validate(step).stream()
+                    .map(problem -> "step '" + step.id() + "' " + problem)
+                    .forEach(problems::add));
+        }
+        return problems;
     }
 
     /**
