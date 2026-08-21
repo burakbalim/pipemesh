@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.pipemesh.core.workflow.StepId;
 import io.pipemesh.core.workflow.WorkflowId;
+import io.pipemesh.core.cost.Spend;
 import io.pipemesh.core.workflow.WorkflowVersion;
 
 import java.util.Objects;
@@ -25,7 +26,17 @@ public record ExecutionSnapshot(
         StepId currentStep,
         ObjectNode variables,
         long createdAtEpochMillis,
-        long updatedAtEpochMillis) {
+        long updatedAtEpochMillis,
+        Spend spend) {
+
+    public ExecutionSnapshot(
+            ExecutionId executionId, OrganizationId organization, WorkflowId workflowId,
+            WorkflowVersion workflowVersion, ExecutionStatus status, StepId currentStep,
+            ObjectNode variables, long createdAtEpochMillis, long updatedAtEpochMillis) {
+
+        this(executionId, organization, workflowId, workflowVersion, status, currentStep,
+                variables, createdAtEpochMillis, updatedAtEpochMillis, Spend.NOTHING);
+    }
 
     public ExecutionSnapshot {
         Objects.requireNonNull(executionId, "execution id");

@@ -1,6 +1,7 @@
 package io.pipemesh.core.workflow;
 
 import java.util.Collections;
+import io.pipemesh.core.cost.CostBudget;
 import io.pipemesh.core.policy.StepPolicy;
 
 import java.util.LinkedHashMap;
@@ -18,10 +19,18 @@ public record WorkflowDefinition(
         WorkflowVersion version,
         StepId entry,
         List<Step> steps,
-        StepPolicy defaults) {
+        StepPolicy defaults,
+        CostBudget budget) {
 
     public WorkflowDefinition(WorkflowId id, WorkflowVersion version, StepId entry, List<Step> steps) {
-        this(id, version, entry, steps, StepPolicy.DEFAULT);
+        this(id, version, entry, steps, StepPolicy.DEFAULT, CostBudget.UNLIMITED);
+    }
+
+    public WorkflowDefinition(
+            WorkflowId id, WorkflowVersion version, StepId entry,
+            List<Step> steps, StepPolicy defaults) {
+
+        this(id, version, entry, steps, defaults, CostBudget.UNLIMITED);
     }
 
     public WorkflowDefinition {
@@ -34,6 +43,7 @@ public record WorkflowDefinition(
         }
         steps = List.copyOf(steps);
         defaults = defaults == null ? StepPolicy.DEFAULT : defaults;
+        budget = budget == null ? CostBudget.UNLIMITED : budget;
     }
 
     public Optional<Step> step(StepId stepId) {

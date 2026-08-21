@@ -25,7 +25,8 @@ public final class SchemaMigrator {
 
     private static final String LOCATION = "/io/pipemesh/postgres/migration/";
 
-    private static final List<String> MIGRATIONS = List.of("V001__execution_state.sql", "V002__execution_lease.sql");
+    private static final List<String> MIGRATIONS = List.of("V001__execution_state.sql", "V002__execution_lease.sql",
+            "V003__execution_spend.sql");
 
     private final DataSource dataSource;
 

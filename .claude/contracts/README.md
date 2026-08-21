@@ -22,7 +22,8 @@ onunla çelişmez.
 | 9 | [workflow-versioning.md](workflow-versioning.md) | §24, §24.1 — sürüm kimliğin parçası; migrasyon kapsam dışı | **Tamam** (2026-08-21) |
 | 10a | [orphan-recovery.md](orphan-recovery.md) | §15, §38 — `RUNNING`'de takılı execution'ları toplama | **Tamam** (2026-08-20) |
 | 10 | [distributed-workers.md](distributed-workers.md) | §28.1 — kira ile kapma, dispatcher, `StartMode` | **Tamam** (2026-08-21) |
-| 11 | _cost-and-evaluation_ | §39 cost tracking, evaluation, model routing | Planlanan |
+| 11 | [cost-budgets.md](cost-budgets.md) | §39.1 — fiyat, harcama muhasebesi, execution bütçesi | **Tamam** (2026-08-21) |
+| 11b | _evaluation-and-routing_ | §39 kalite skoru ve model yönlendirme — #11'den ayrıldı | Planlanan |
 | 12 | [grpc-boundary.md](grpc-boundary.md) | §26.1 gRPC servisi (`CapabilityWorker` hariç → #14) | **Tamam** (2026-08-20) |
 | 13a | [python-sdk.md](python-sdk.md) | Python client — proto'dan üretilen stub'lar + ince sarmalayıcı | **Tamam** (2026-08-20) |
 | 13b | [typescript-sdk.md](typescript-sdk.md) | TypeScript client — aynı proto, `@grpc/proto-loader` | **Tamam** (2026-08-20) |

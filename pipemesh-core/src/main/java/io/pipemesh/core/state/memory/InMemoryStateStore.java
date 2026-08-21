@@ -43,7 +43,7 @@ public final class InMemoryStateStore implements StateStore {
     @Override
     public ExecutionRecord create(ExecutionRecord record) {
         long now = clock.millis();
-        ExecutionRecord stored = stamped(record, 1, now, now);
+        ExecutionRecord stored = record.stamped(1, now, now);
         if (executions.putIfAbsent(record.executionId(), stored) != null) {
             throw new IllegalStateException("execution " + record.executionId() + " already exists");
         }
@@ -57,8 +57,8 @@ public final class InMemoryStateStore implements StateStore {
 
     @Override
     public ExecutionRecord advance(ExecutionRecord record, StepRecord step) {
-        ExecutionRecord stored = stamped(
-                record, record.version() + 1, record.createdAtEpochMillis(), clock.millis());
+        ExecutionRecord stored = record.stamped(
+                record.version() + 1, record.createdAtEpochMillis(), clock.millis());
         boolean replaced = executions.replace(
                 record.executionId(), expected(record), stored);
         if (!replaced) {
@@ -97,21 +97,4 @@ public final class InMemoryStateStore implements StateStore {
         return current;
     }
 
-    private ExecutionRecord stamped(
-            ExecutionRecord record, long version, long createdAt, long updatedAt) {
-
-        return new ExecutionRecord(
-                record.executionId(),
-                record.organization(),
-                record.workflowId(),
-                record.workflowVersion(),
-                record.status(),
-                record.currentStep(),
-                record.variables(),
-                record.traceContext(),
-                version,
-                createdAt,
-                updatedAt,
-                record.principal());
-    }
 }

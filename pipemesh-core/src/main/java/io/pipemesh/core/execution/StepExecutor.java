@@ -1,5 +1,6 @@
 package io.pipemesh.core.execution;
 
+import io.pipemesh.core.model.ModelId;
 import io.pipemesh.core.workflow.Step;
 import io.pipemesh.core.workflow.StepId;
 import io.pipemesh.core.workflow.StepType;
@@ -49,6 +50,18 @@ public interface StepExecutor {
      */
     default boolean repeatable(Step step, ExecutionContext context) {
         return true;
+    }
+
+    /**
+     * Which models this step could call.
+     *
+     * <p>Asked at compile time, so a workflow with a money budget can be refused
+     * a model whose price nobody registered (§39). The engine does not read step
+     * configuration itself — the executor that owns the type does, which is the
+     * same reason {@link #outgoing} exists.
+     */
+    default List<ModelId> models(Step step) {
+        return List.of();
     }
 
     /**

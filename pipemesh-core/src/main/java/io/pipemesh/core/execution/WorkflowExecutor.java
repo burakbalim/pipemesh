@@ -11,6 +11,7 @@ import io.pipemesh.core.observability.TraceContext;
 import io.pipemesh.core.policy.FailurePolicy;
 import io.pipemesh.core.policy.StepPolicy;
 import io.pipemesh.core.state.ExecutionRecord;
+import io.pipemesh.core.cost.SpendMeter;
 import io.pipemesh.core.state.StateStore;
 import io.pipemesh.core.state.StepRecord;
 import io.pipemesh.core.workflow.ExecutionGraph;
@@ -26,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -66,6 +68,7 @@ public final class WorkflowExecutor {
     private final Clock clock;
     private final int stepBudget;
     private final ExecutionObserver observer;
+    private final SpendMeter meter;
 
     public WorkflowExecutor(StateStore stateStore, StepExecutors executors) {
         this(stateStore, executors, Clock.systemUTC(), DEFAULT_STEP_BUDGET, ExecutionObserver.NONE);
@@ -86,6 +89,22 @@ public final class WorkflowExecutor {
             int stepBudget,
             ExecutionObserver observer) {
 
+        this(stateStore, executors, clock, stepBudget, observer, SpendMeter.UNPRICED);
+    }
+
+    /**
+     * @param meter what each model charges, so an execution can be told what it
+     *              has spent and stopped when a budget says so (§39)
+     */
+    public WorkflowExecutor(
+            StateStore stateStore,
+            StepExecutors executors,
+            Clock clock,
+            int stepBudget,
+            ExecutionObserver observer,
+            SpendMeter meter) {
+
+        this.meter = Objects.requireNonNull(meter, "spend meter");
         this.stateStore = Objects.requireNonNull(stateStore, "state store");
         this.executors = Objects.requireNonNull(executors, "executors");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -142,12 +161,16 @@ public final class WorkflowExecutor {
         return drive(graph, persistOutcome(record, step, result, startedAt, finishedAt, 1));
     }
 
-    /** Runs until the execution suspends, ends, or exhausts its step budget. */
+    /** Runs until the execution suspends, ends, or exhausts a budget. */
     public ExecutionRecord drive(ExecutionGraph graph, ExecutionRecord from) {
         ExecutionRecord current = from;
         for (int taken = 0; taken < stepBudget; taken++) {
             if (isSettled(current)) {
                 return announce(current);
+            }
+            Optional<String> overspent = graph.budget().exceededBy(current.spend());
+            if (overspent.isPresent()) {
+                return announce(overspent(current, overspent.get()));
             }
             current = runStep(graph, current);
         }
@@ -359,13 +382,13 @@ public final class WorkflowExecutor {
             long startedAt, long finishedAt, int attempt) {
 
         ExecutionRecord next = switch (result) {
-            case StepResult.Continue moved -> record(record, ExecutionStatus.RUNNING,
+            case StepResult.Continue moved -> record.movedTo(ExecutionStatus.RUNNING,
                     moved.nextStep(), merged(record, moved.variables()));
-            case StepResult.Suspend ignored -> record(record, ExecutionStatus.WAITING,
+            case StepResult.Suspend ignored -> record.movedTo(ExecutionStatus.WAITING,
                     record.currentStep(), record.variables());
-            case StepResult.Terminate ended -> record(record, ended.status(),
+            case StepResult.Terminate ended -> record.movedTo(ended.status(),
                     record.currentStep(), record.variables());
-            case StepResult.Failed ignored -> record(record, ExecutionStatus.FAILED,
+            case StepResult.Failed ignored -> record.movedTo(ExecutionStatus.FAILED,
                     record.currentStep(), record.variables());
         };
         return write(record, next, step, result, startedAt, finishedAt, attempt);
@@ -376,7 +399,7 @@ public final class WorkflowExecutor {
             ExecutionRecord record, Step step, StepResult result, long startedAt, long finishedAt,
             int attempt, ExecutionStatus status, StepId currentStep) {
 
-        ExecutionRecord next = record(record, status, currentStep, record.variables());
+        ExecutionRecord next = record.movedTo(status, currentStep, record.variables());
         return write(record, next, step, result, startedAt, finishedAt, attempt);
     }
 
@@ -385,7 +408,12 @@ public final class WorkflowExecutor {
             long startedAt, long finishedAt, int attempt) {
 
         StepRecord history = historyEntry(from, step, result, startedAt, finishedAt, attempt);
-        ExecutionRecord advanced = stateStore.advance(next, history);
+
+        // The step's spend joins the execution's total in the same write as the
+        // step itself — split them and a crash between the two loses the money or
+        // counts it twice, which is the rule the whole store is built on (§15).
+        ExecutionRecord advanced =
+                stateStore.advance(next.withSpend(meter.after(from.spend(), history)), history);
 
         observer.stepFinished(new StepEvent(
                 eventOf(advanced), step.id(), step.type(), history.outcome(),
@@ -520,27 +548,29 @@ public final class WorkflowExecutor {
                 request.principal());
     }
 
-    private ExecutionRecord record(
-            ExecutionRecord from, ExecutionStatus status, StepId currentStep, ObjectNode variables) {
-
-        return new ExecutionRecord(
-                from.executionId(),
-                from.organization(),
-                from.workflowId(),
-                from.workflowVersion(),
-                status,
-                currentStep,
-                variables,
-                from.traceContext(),
-                from.version(),
-                from.createdAtEpochMillis(),
-                from.updatedAtEpochMillis(),
-                from.principal());
+    /**
+     * Stops an execution that has spent its budget (§39).
+     *
+     * <p>Checked before the next step, never in the middle of one: a provider call
+     * already made is already paid for, and abandoning it would waste the money
+     * rather than save it.
+     */
+    private ExecutionRecord overspent(ExecutionRecord record, String reason) {
+        return engineFailure(record, "execution.budget_exhausted", reason);
     }
 
     private ExecutionRecord exhausted(ExecutionRecord record) {
-        ExecutionRecord failed = record(
-                record, ExecutionStatus.FAILED, record.currentStep(), record.variables());
+        return engineFailure(record, "execution.step_budget_exhausted",
+                "took more than " + stepBudget + " steps");
+    }
+
+    /**
+     * Fails an execution for a reason the engine itself reached, with a history
+     * entry saying so — otherwise the run ends and nothing anywhere says why.
+     */
+    private ExecutionRecord engineFailure(ExecutionRecord record, String code, String reason) {
+        ExecutionRecord failed =
+                record.movedTo(ExecutionStatus.FAILED, record.currentStep(), record.variables());
         long now = clock.millis();
         return stateStore.advance(failed, new StepRecord(
                 record.executionId(),
@@ -548,9 +578,7 @@ public final class WorkflowExecutor {
                 ENGINE_STEP,
                 StepRecord.StepOutcome.FAILED,
                 JsonNodeFactory.instance.objectNode(),
-                JsonNodeFactory.instance.objectNode()
-                        .put("code", "execution.step_budget_exhausted")
-                        .put("budget", stepBudget),
+                JsonNodeFactory.instance.objectNode().put("code", code).put("reason", reason),
                 "", "", 0L, 0L, 0L, now, now,
                 JsonNodeFactory.instance.objectNode(), 1));
     }

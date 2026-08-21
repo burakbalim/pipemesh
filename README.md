@@ -37,7 +37,7 @@ interpretation — not for orchestration.
 | Primitive | Role |
 |---|---|
 | **Workflow** | Versioned JSON definition of the execution graph |
-| **Step** | A unit of execution: `llm`, `capability`, `condition`, `approval`, `parallel`, `transform`, `wait` |
+| **Step** | A unit of execution: `llm`, `capability`, `condition`, `approval`, `parallel`, `transform`, `wait`, `agent` |
 | **Capability** | A named unit of work — backed by MCP, REST, gRPC, an in-process function or an external worker |
 | **Provider** | Pluggable model / messaging backend |
 | **Execution state** | Persisted, observable, resumable |
@@ -191,8 +191,8 @@ examples/       # simple-chat, tool-calling, approval-flow, parallel-flow
 - **Phase 2** ✅ — MCP, structured output, retry, timeout, streaming, prompt registry
 - **Phase 3** ✅ — Persistent state, human approval, resume, parallel execution, event-driven
   execution
-- **Phase 4** — OpenTelemetry ✅, workflow versioning ✅, distributed workers ✅, evaluation, cost
-  tracking, model routing
+- **Phase 4** — OpenTelemetry ✅, workflow versioning ✅, distributed workers ✅, cost tracking ✅,
+  evaluation, model routing
 
 ## Success criteria
 

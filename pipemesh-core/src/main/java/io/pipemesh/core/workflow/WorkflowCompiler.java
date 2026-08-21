@@ -2,6 +2,7 @@ package io.pipemesh.core.workflow;
 
 import io.pipemesh.core.execution.StepExecutor;
 import io.pipemesh.core.execution.StepExecutors;
+import io.pipemesh.core.cost.SpendMeter;
 import io.pipemesh.core.policy.StepPolicy;
 
 import java.util.ArrayList;
@@ -22,9 +23,19 @@ import java.util.Set;
 public final class WorkflowCompiler {
 
     private final StepExecutors executors;
+    private final SpendMeter meter;
 
     public WorkflowCompiler(StepExecutors executors) {
+        this(executors, SpendMeter.UNPRICED);
+    }
+
+    /**
+     * @param meter which models have a registered price, so a workflow that sets
+     *              a money budget can be refused one that does not (§39)
+     */
+    public WorkflowCompiler(StepExecutors executors, SpendMeter meter) {
         this.executors = Objects.requireNonNull(executors, "executors");
+        this.meter = Objects.requireNonNull(meter, "spend meter");
     }
 
     public ExecutionGraph compile(WorkflowDefinition definition) {
@@ -38,12 +49,34 @@ public final class WorkflowCompiler {
         problems.addAll(unknownStepTypes(steps));
         problems.addAll(danglingEdges(steps, definition.defaults()));
         problems.addAll(unreachableSteps(definition.entry(), steps, definition.defaults()));
+        problems.addAll(unpricedModels(definition, steps));
 
         if (!problems.isEmpty()) {
             throw new WorkflowCompilationException(definition.id(), problems);
         }
         return new ExecutionGraph(
-                definition.id(), definition.version(), definition.entry(), steps, definition.defaults());
+                definition.id(), definition.version(), definition.entry(), steps,
+                definition.defaults(), definition.budget());
+    }
+
+    /**
+     * A money budget that cannot see what a step costs is not a budget — it would
+     * let exactly the runs it exists to stop go through untouched. Refused here
+     * rather than at three in the morning.
+     */
+    private List<String> unpricedModels(WorkflowDefinition definition, Map<StepId, Step> steps) {
+        if (!definition.budget().limitsMoney()) {
+            return List.of();
+        }
+        List<String> problems = new ArrayList<>();
+        for (Step step : steps.values()) {
+            executors.find(step.type()).ifPresent(executor -> executor.models(step).stream()
+                    .filter(model -> !meter.canPrice(model))
+                    .forEach(model -> problems.add(
+                            "step '" + step.id() + "' uses model '" + model + "', which has no"
+                                    + " registered price, but this workflow sets a cost budget")));
+        }
+        return problems;
     }
 
     private Map<StepId, Step> collectSteps(WorkflowDefinition definition, List<String> problems) {

@@ -209,6 +209,12 @@ public final class LlmStepExecutor implements StepExecutor {
     }
 
     @Override
+    public List<ModelId> models(Step step) {
+        String model = step.config().path(MODEL).asText("");
+        return model.isBlank() ? List.of() : List.of(ModelId.of(model));
+    }
+
+    @Override
     public List<StepId> outgoing(Step step) {
         return Stepwiring.stepIds(step, NEXT);
     }

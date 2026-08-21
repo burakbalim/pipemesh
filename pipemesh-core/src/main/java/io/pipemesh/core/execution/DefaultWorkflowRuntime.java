@@ -221,6 +221,7 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
                 record.currentStep(),
                 record.variables(),
                 record.createdAtEpochMillis(),
-                record.updatedAtEpochMillis());
+                record.updatedAtEpochMillis(),
+                record.spend());
     }
 }

@@ -168,6 +168,12 @@ passes the tests — say so rather than accepting it.
   organization comes from the resolved principal, not from the request. A deployment that
   identifies nobody has no isolation, which is a property of not authenticating anyone rather than
   something the runtime can fix; say so rather than implying otherwise (§22.2).
+- **An execution's spend is written with the step that caused it.** Cost, tokens and model calls
+  accumulate on the record in the same transaction as the step, and a budget is checked before the
+  *next* step — never inside one, because a provider call already made is already paid for. An
+  unpriced model is not a free one: a workflow with a money budget is refused one at compile time
+  (§39.1).
+- **Money is never a floating-point number.** Integer micros, rounded once at the end.
 - **An observer must never fail an execution.** Whatever it throws is contained. Telemetry going
   dark is a bad day; telemetry taking a workflow down is an outage.
 

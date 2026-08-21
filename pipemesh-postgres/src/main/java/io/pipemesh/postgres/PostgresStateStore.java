@@ -4,6 +4,7 @@ import io.pipemesh.core.execution.ExecutionId;
 import io.pipemesh.core.execution.ExecutionStatus;
 import io.pipemesh.core.capability.Principal;
 import io.pipemesh.core.execution.OrganizationId;
+import io.pipemesh.core.cost.Spend;
 import io.pipemesh.core.state.ExecutionRecord;
 import io.pipemesh.core.state.StaleExecutionException;
 import io.pipemesh.core.state.StateStore;
@@ -49,8 +50,8 @@ public final class PostgresStateStore implements StateStore {
         String sql = """
                 INSERT INTO workflow_execution
                     (execution_id, organization_id, workflow_id, workflow_version, status,
-                     current_step, variables, trace_context, principal, version)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                     current_step, variables, trace_context, principal, spend, version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 """;
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -64,6 +65,7 @@ public final class PostgresStateStore implements StateStore {
             statement.setObject(7, JsonColumn.toJsonb(record.variables()));
             statement.setString(8, record.traceContext());
             statement.setObject(9, JsonColumn.toJsonb(Principals.toJson(record.principal())));
+            statement.setObject(10, JsonColumn.toJsonb(record.spend().toJson()));
             statement.executeUpdate();
         } catch (SQLException failure) {
             throw new StateStoreException("could not create execution " + record.executionId(), failure);
@@ -76,7 +78,7 @@ public final class PostgresStateStore implements StateStore {
     public Optional<ExecutionRecord> find(ExecutionId executionId) {
         String sql = """
                 SELECT execution_id, organization_id, workflow_id, workflow_version, status,
-                       current_step, variables, trace_context, principal, version,
+                       current_step, variables, trace_context, principal, spend, version,
                        created_at, updated_at
                   FROM workflow_execution
                  WHERE execution_id = ?
@@ -119,7 +121,7 @@ public final class PostgresStateStore implements StateStore {
     public List<ExecutionRecord> findStale(ExecutionStatus status, long untouchedSince, int limit) {
         String sql = """
                 SELECT execution_id, organization_id, workflow_id, workflow_version, status,
-                       current_step, variables, trace_context, principal, version,
+                       current_step, variables, trace_context, principal, spend, version,
                        created_at, updated_at
                   FROM workflow_execution
                  WHERE status = ? AND updated_at < ?
@@ -174,7 +176,7 @@ public final class PostgresStateStore implements StateStore {
         String sql = """
                 UPDATE workflow_execution
                    SET status = ?, current_step = ?, variables = ?, trace_context = ?,
-                       version = version + 1, updated_at = now()
+                       spend = ?, version = version + 1, updated_at = now()
                  WHERE execution_id = ? AND version = ?
                 """;
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -182,8 +184,9 @@ public final class PostgresStateStore implements StateStore {
             statement.setString(2, stepValue(record.currentStep()));
             statement.setObject(3, JsonColumn.toJsonb(record.variables()));
             statement.setString(4, record.traceContext());
-            statement.setString(5, record.executionId().value());
-            statement.setLong(6, record.version());
+            statement.setObject(5, JsonColumn.toJsonb(record.spend().toJson()));
+            statement.setString(6, record.executionId().value());
+            statement.setLong(7, record.version());
             return statement.executeUpdate() == 1;
         }
     }
@@ -230,7 +233,8 @@ public final class PostgresStateStore implements StateStore {
                 rows.getLong("version"),
                 rows.getTimestamp("created_at").getTime(),
                 rows.getTimestamp("updated_at").getTime(),
-                Principals.fromJson(JsonColumn.readObject(rows.getString("principal"))));
+                Principals.fromJson(JsonColumn.readObject(rows.getString("principal"))),
+                Spend.fromJson(JsonColumn.readObject(rows.getString("spend"))));
     }
 
     private StepRecord readStep(ResultSet rows) throws SQLException {

@@ -8,6 +8,7 @@ import io.pipemesh.core.execution.ExecutionStatus;
 import io.pipemesh.core.execution.OrganizationId;
 import io.pipemesh.core.workflow.StepId;
 import io.pipemesh.core.workflow.WorkflowId;
+import io.pipemesh.core.cost.Spend;
 import io.pipemesh.core.workflow.WorkflowVersion;
 
 import java.util.Objects;
@@ -43,7 +44,8 @@ public record ExecutionRecord(
         long version,
         long createdAtEpochMillis,
         long updatedAtEpochMillis,
-        Principal principal) {
+        Principal principal,
+        Spend spend) {
 
     public ExecutionRecord(
             ExecutionId executionId, OrganizationId organization, WorkflowId workflowId,
@@ -53,7 +55,18 @@ public record ExecutionRecord(
 
         this(executionId, organization, workflowId, workflowVersion, status, currentStep,
                 variables, traceContext, version, createdAtEpochMillis, updatedAtEpochMillis,
-                Principal.SYSTEM);
+                Principal.SYSTEM, Spend.NOTHING);
+    }
+
+    public ExecutionRecord(
+            ExecutionId executionId, OrganizationId organization, WorkflowId workflowId,
+            WorkflowVersion workflowVersion, ExecutionStatus status, StepId currentStep,
+            ObjectNode variables, String traceContext, long version,
+            long createdAtEpochMillis, long updatedAtEpochMillis, Principal principal) {
+
+        this(executionId, organization, workflowId, workflowVersion, status, currentStep,
+                variables, traceContext, version, createdAtEpochMillis, updatedAtEpochMillis,
+                principal, Spend.NOTHING);
     }
 
     public ExecutionRecord {
@@ -64,6 +77,39 @@ public record ExecutionRecord(
         Objects.requireNonNull(status, "status");
         variables = variables == null ? JsonNodeFactory.instance.objectNode() : variables.deepCopy();
         principal = principal == null ? Principal.SYSTEM : principal;
+        spend = spend == null ? Spend.NOTHING : spend;
+    }
+
+    /**
+     * The same execution, having spent a little more (§39).
+     *
+     * <p>This and the two below exist so that nothing rebuilds a record field by
+     * field. A record with a convenience constructor will happily accept a
+     * rebuild that omits the newest field, and the compiler says nothing — which
+     * is exactly how spend was silently dropped by the in-memory store the first
+     * time it was added.
+     */
+    public ExecutionRecord withSpend(Spend spend) {
+        return new ExecutionRecord(
+                executionId, organization, workflowId, workflowVersion, status, currentStep,
+                variables, traceContext, version, createdAtEpochMillis, updatedAtEpochMillis,
+                principal, spend);
+    }
+
+    /** The same execution, moved along by a step. */
+    public ExecutionRecord movedTo(ExecutionStatus status, StepId currentStep, ObjectNode variables) {
+        return new ExecutionRecord(
+                executionId, organization, workflowId, workflowVersion, status, currentStep,
+                variables, traceContext, version, createdAtEpochMillis, updatedAtEpochMillis,
+                principal, spend);
+    }
+
+    /** The same execution as the store now holds it. */
+    public ExecutionRecord stamped(long version, long createdAtEpochMillis, long updatedAtEpochMillis) {
+        return new ExecutionRecord(
+                executionId, organization, workflowId, workflowVersion, status, currentStep,
+                variables, traceContext, version, createdAtEpochMillis, updatedAtEpochMillis,
+                principal, spend);
     }
 
     @Override

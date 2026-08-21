@@ -16,6 +16,17 @@
 
     "description": { "type": "string" },
 
+    "budget": {
+      "$comment": "What one execution may spend (§39). Absent means unlimited.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxCost":       { "type": "string" },
+        "maxModelCalls": { "type": "number" },
+        "maxTokens":     { "type": "number" }
+      }
+    },
+
     "steps": {
       "type": "array",
       "items": {

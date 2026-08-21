@@ -1,5 +1,6 @@
 package io.pipemesh.core.workflow;
 
+import io.pipemesh.core.cost.CostBudget;
 import io.pipemesh.core.policy.StepPolicy;
 
 import java.util.Map;
@@ -17,7 +18,15 @@ public record ExecutionGraph(
         WorkflowVersion version,
         StepId entry,
         Map<StepId, Step> steps,
-        StepPolicy defaults) {
+        StepPolicy defaults,
+        CostBudget budget) {
+
+    public ExecutionGraph(
+            WorkflowId workflowId, WorkflowVersion version, StepId entry,
+            Map<StepId, Step> steps, StepPolicy defaults) {
+
+        this(workflowId, version, entry, steps, defaults, CostBudget.UNLIMITED);
+    }
 
     public ExecutionGraph {
         Objects.requireNonNull(workflowId, "workflow id");
@@ -25,6 +34,7 @@ public record ExecutionGraph(
         Objects.requireNonNull(entry, "entry");
         steps = Map.copyOf(steps);
         defaults = defaults == null ? StepPolicy.DEFAULT : defaults;
+        budget = budget == null ? CostBudget.UNLIMITED : budget;
     }
 
     public Step stepAt(StepId id) {

@@ -2325,6 +2325,53 @@ maxCost
 maxModelCalls
 ```
 
+## 39.1 Money is the missing budget
+
+This codebase keeps making the same decision: a step budget, an agent turn limit, a worker
+deadline, a wait timeout. Anything unbounded eventually becomes something nobody noticed. Money
+was the member missing from that list — an agent that loops stops at its turn limit, while a
+workflow sending long context ten times over had nothing stopping it.
+
+```json
+{ "id": "research", "version": "1.0", "entry": "plan",
+  "budget": { "maxCost": "2.50", "maxModelCalls": 20, "maxTokens": 200000 },
+  "steps": [ ... ] }
+```
+
+**A price is registration metadata.** A model registration says what it charges; the workflow
+never mentions money, exactly as it never mentions how a capability is reached (§9.8). Prices
+change with the registration and no workflow is touched.
+
+**An unpriced model is not a free one.** A local model genuinely costs nothing and a forgotten
+price looks identical from inside the runtime, so the two are kept apart: unpriced calls are
+counted as unpriced, and a workflow that sets a money budget is *refused at compile time* a model
+whose price nobody registered. A budget that cannot see what a step costs would let through
+exactly the runs it exists to stop.
+
+**Money is integer arithmetic** — micros, rounded once at the end. Per-token prices are far below
+a cent, and what is being added up here is exactly money.
+
+**Spend is execution state**, unlike a lease (§28.1): the decision it feeds is the execution's
+own, it has to survive a restart, and "what did this run cost" is a question about the execution.
+It is written in the same transaction as the step that caused it, for the reason every other write
+here is (§15) — split them and a crash loses the money or counts it twice.
+
+**The check happens before the next step, never inside one.** A provider call already made is
+already paid for; abandoning it mid-flight wastes the money rather than saving it. So an execution
+stops just after the step that took it over budget, not just before.
+
+**Landing exactly on a limit is not overrunning it** — the same distinction the step budget
+already makes, and the same bug if it is missed.
+
+### What is deliberately not here
+
+**Evaluation** — scoring how good an answer was — is not a runtime decision. What "good" means is
+the application's knowledge, and §3 is exactly about the runtime knowing *when* something runs and
+never *what* it does. Its likely shape is a capability, not a new engine concept.
+
+**Model routing** ("simple task → cheap model") builds on the prices above, but where the routing
+decision is made — workflow, registration, or a model of its own — is a design question of its own.
+
 ### Evaluation
 
 ```text
