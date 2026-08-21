@@ -1,5 +1,7 @@
 package io.pipemesh.core.execution.step;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import io.pipemesh.core.execution.ExecutionContext;
 import io.pipemesh.core.execution.StepExecutor;
 import io.pipemesh.core.execution.StepResult;
@@ -10,6 +12,7 @@ import io.pipemesh.core.workflow.StepId;
 import io.pipemesh.core.workflow.StepType;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Branches on a deterministic comparison (§9.3).
@@ -25,6 +28,17 @@ import java.util.List;
  */
 public final class ConditionStepExecutor implements StepExecutor {
 
+    private static final JsonNode SCHEMA = StepSchemas.parse("""
+            {
+              "properties": {
+                "expression": {"type": "string"},
+                "onTrue":     {"type": "string"},
+                "onFalse":    {"type": "string"}
+              },
+              "required": ["expression"]
+            }
+            """);
+
     private static final String EXPRESSION = "expression";
     private static final String ON_TRUE = "onTrue";
     private static final String ON_FALSE = "onFalse";
@@ -32,6 +46,13 @@ public final class ConditionStepExecutor implements StepExecutor {
     @Override
     public boolean supports(StepType type) {
         return StepType.CONDITION.equals(type);
+    }
+
+
+    /** What a condition step may say. Anything else is refused at load time (§23.1). */
+    @Override
+    public Optional<JsonNode> configSchema() {
+        return Optional.of(SCHEMA);
     }
 
     @Override

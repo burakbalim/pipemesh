@@ -1,5 +1,7 @@
 package io.pipemesh.core.execution.step;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.pipemesh.core.execution.ExecutionContext;
@@ -32,6 +34,18 @@ import java.util.Optional;
  */
 public final class ApprovalStepExecutor implements ResumableStepExecutor {
 
+    private static final JsonNode SCHEMA = StepSchemas.parse("""
+            {
+              "properties": {
+                "message":        {"type": "string"},
+                "onApproved":     {"type": "string"},
+                "onRejected":     {"type": "string"},
+                "timeoutSeconds": {"type": "integer"}
+              },
+              "required": ["onApproved", "onRejected"]
+            }
+            """);
+
     private static final String MESSAGE = "message";
     private static final String ON_APPROVED = "onApproved";
     private static final String ON_REJECTED = "onRejected";
@@ -57,6 +71,13 @@ public final class ApprovalStepExecutor implements ResumableStepExecutor {
     @Override
     public boolean supports(StepType type) {
         return StepType.HUMAN_APPROVAL.equals(type);
+    }
+
+
+    /** What a human_approval step may say. Anything else is refused at load time (§23.1). */
+    @Override
+    public Optional<JsonNode> configSchema() {
+        return Optional.of(SCHEMA);
     }
 
     @Override

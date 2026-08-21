@@ -763,13 +763,12 @@ proto/pipemesh.proto    API contract'ı (implementasyon yok)
 | Compiler geçersiz grafiği reddediyor | ✅ `WorkflowCompilerTest` |
 | İkinci workflow sadece config ile çalışıyor | ✅ `ConfigRepositoryTest` |
 | Proto yazıldı, girdi/çıktılar kayıpsız map edilebiliyor | ✅ `proto/pipemesh.proto` |
-| Şema gövdesinde kod taşıyan step'i reddediyor | ⚠️ **Yapılmadı** — `workflow.schema.json` henüz yazılmadı |
+| Şema gövdesinde kod taşıyan step'i reddediyor | ✅ contract #16b (2026-08-21) |
 | Workflow step'i transport/owner/version taşımıyor | ✅ Tasarımla; `ConfigRepositoryTest` doğruluyor |
 
-**Kalan tek eksik:** JSON Schema dosyaları (`schemas/workflow.schema.json` vb.) yazılmadı.
-`WorkflowDefinitionReader` + `WorkflowCompiler` doğrulamayı kodda yapıyor ve inline kod taşıyan bir
-step zaten hiçbir executor tarafından sahiplenilmediği için compile'da düşüyor — ama şema
-seviyesinde `additionalProperties: false` garantisi yok. Ayrı bir iş olarak kayda geçirildi.
+**Bu eksik kapandı:** JSON Schema dosyaları contract #16b ile yazıldı (2026-08-21). Artık tanınan
+bir step tipine fazladan alan eklemek de yükleme anında reddediliyor — yalnızca tanınmayan tip
+değil.
 
 ### Aşama 4 planı
 

@@ -1,0 +1,27 @@
+{
+  "$comment": "The shape every workflow shares. What a particular step type may say beyond this is declared by the executor that owns the type — see StepExecutor.configSchema().",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "entry", "steps"],
+
+  "properties": {
+    "id":      { "type": "string" },
+    "version": { "type": "string" },
+    "entry":   { "type": "string" },
+
+    "retry":     { "$comment": "workflow-wide default; see step-common.schema.json" },
+    "timeout":   { "type": "string" },
+    "onFailure": { "type": "object" },
+
+    "description": { "type": "string" },
+
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"]
+      }
+    }
+  }
+}

@@ -14,6 +14,7 @@ import io.pipemesh.core.model.CompletionResponse;
 import io.pipemesh.core.model.MessagingProvider;
 import io.pipemesh.core.model.ModelId;
 import io.pipemesh.core.prompt.PromptId;
+import io.pipemesh.core.schema.WorkflowValidator;
 import io.pipemesh.core.state.memory.InMemoryApprovalStore;
 import io.pipemesh.core.workflow.InMemoryWorkflowRegistry;
 import io.pipemesh.core.workflow.WorkflowCompiler;
@@ -187,6 +188,19 @@ class ConfigRepositoryTest {
         assertTrue(config.intents().intents().stream()
                         .allMatch(intent -> workflows.contains(intent.workflow().value())),
                 "an intent pointing at a workflow nobody registered would fail only when someone said the words");
+    }
+
+    @Test
+    void everyExampleWorkflowIsAShapeTheFormatAllows() {
+        WorkflowValidator shape = new WorkflowValidator(StepExecutors.of(
+                new LlmStepExecutor(config.modelRegistry(
+                        List.of(new StubProviderFactory("openai-compatible"))), config.promptRegistry()),
+                new ConditionStepExecutor(),
+                new CapabilityStepExecutor(config.capabilityRegistry(), List.of()),
+                new ApprovalStepExecutor(new InMemoryApprovalStore()),
+                new TerminalStepExecutor()));
+
+        config.workflowSources().forEach(shape::validate);
     }
 
     @Test

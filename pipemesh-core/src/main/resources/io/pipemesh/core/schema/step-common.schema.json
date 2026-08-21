@@ -1,0 +1,34 @@
+{
+  "$comment": "Fields any step may carry, whatever its type. Merged with the type's own schema before a step is validated, so a step type declares only what is its own.",
+
+  "type": "object",
+  "properties": {
+    "id":          { "type": "string" },
+    "type":        { "type": "string" },
+    "description": { "type": "string" },
+
+    "timeout": { "type": "string" },
+
+    "retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxAttempts":  { "type": "integer" },
+        "backoff":      { "type": "string", "enum": ["fixed", "exponential"] },
+        "initialDelay": { "type": "string" },
+        "maxDelay":     { "type": "string" }
+      }
+    },
+
+    "onFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strategy": { "type": "string", "enum": ["fail", "fallback", "continue", "goto"] },
+        "model":    { "type": "string" },
+        "prompt":   { "type": "string" },
+        "goto":     { "type": "string" }
+      }
+    }
+  }
+}

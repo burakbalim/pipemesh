@@ -9,11 +9,12 @@ import java.util.List;
  * Checks a value against a deliberately small subset of JSON Schema.
  *
  * <pre>
- * type        object · array · string · number · integer · boolean · null
- * properties  recursively
+ * type                  object · array · string · number · integer · boolean · null
+ * properties            recursively
  * required
  * items
  * enum
+ * additionalProperties  false only — closing a shape, never describing one
  * </pre>
  *
  * <p>No {@code $ref}, no {@code allOf}/{@code anyOf}/{@code oneOf}, no patterns,
@@ -54,6 +55,7 @@ public final class JsonSchemaValidator {
         checkEnum(path, schema, value, violations);
         checkRequired(path, schema, value, violations);
         checkProperties(path, schema, value, violations);
+        checkUnknownProperties(path, schema, value, violations);
         checkItems(path, schema, value, violations);
     }
 
@@ -126,6 +128,27 @@ public final class JsonSchemaValidator {
             if (value.has(property.getKey())) {
                 check(child(path, property.getKey()), property.getValue(),
                         value.get(property.getKey()), violations);
+            }
+        });
+    }
+
+    /**
+     * Refuses fields the schema did not name.
+     *
+     * <p>Only the {@code false} form is supported; a schema describing what extra
+     * fields may look like is a different feature, and this one exists to close a
+     * shape rather than to describe one (§23.1).
+     */
+    private void checkUnknownProperties(
+            String path, JsonNode schema, JsonNode value, List<SchemaViolation> violations) {
+
+        if (!value.isObject() || schema.path("additionalProperties").asBoolean(true)) {
+            return;
+        }
+        JsonNode declared = schema.path("properties");
+        value.fieldNames().forEachRemaining(field -> {
+            if (!declared.has(field)) {
+                violations.add(new SchemaViolation(child(path, field), "is not a field this allows"));
             }
         });
     }

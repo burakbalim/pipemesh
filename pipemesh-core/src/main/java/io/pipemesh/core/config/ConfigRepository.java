@@ -60,6 +60,11 @@ public final class ConfigRepository {
         }
     }
 
+    /** Workflow sources as written, for anything that needs the fields a definition drops. */
+    public List<JsonNode> workflowSources() {
+        return jsonFilesIn("workflows").stream().map(this::parse).toList();
+    }
+
     public List<WorkflowDefinition> workflows() {
         WorkflowDefinitionReader reader = new WorkflowDefinitionReader();
         return jsonFilesIn("workflows").stream()

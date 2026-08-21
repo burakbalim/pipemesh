@@ -1,11 +1,15 @@
 package io.pipemesh.core.execution.step;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import io.pipemesh.core.execution.ExecutionContext;
 import io.pipemesh.core.execution.ExecutionStatus;
 import io.pipemesh.core.execution.StepExecutor;
 import io.pipemesh.core.execution.StepResult;
 import io.pipemesh.core.workflow.Step;
 import io.pipemesh.core.workflow.StepType;
+
+import java.util.Optional;
 
 /**
  * Ends an execution in a declared status.
@@ -21,11 +25,26 @@ import io.pipemesh.core.workflow.StepType;
  */
 public final class TerminalStepExecutor implements StepExecutor {
 
+    private static final JsonNode SCHEMA = StepSchemas.parse("""
+            {
+              "properties": {
+                "status": {"type": "string", "enum": ["COMPLETED", "CANCELLED", "FAILED"]}
+              }
+            }
+            """);
+
     private static final String STATUS = "status";
 
     @Override
     public boolean supports(StepType type) {
         return StepType.TERMINAL.equals(type);
+    }
+
+
+    /** What a terminal step may say. Anything else is refused at load time (§23.1). */
+    @Override
+    public Optional<JsonNode> configSchema() {
+        return Optional.of(SCHEMA);
     }
 
     @Override

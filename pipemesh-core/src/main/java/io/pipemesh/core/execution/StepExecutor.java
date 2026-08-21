@@ -4,7 +4,10 @@ import io.pipemesh.core.workflow.Step;
 import io.pipemesh.core.workflow.StepId;
 import io.pipemesh.core.workflow.StepType;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The extension point of the engine (§27).
@@ -42,5 +45,24 @@ public interface StepExecutor {
      */
     default boolean repeatable(Step step) {
         return true;
+    }
+
+    /**
+     * The fields this step type understands, as a JSON Schema fragment.
+     *
+     * <p>Only what is its own: the fields every step may carry — {@code id},
+     * {@code retry}, {@code timeout}, {@code onFailure} — are merged in by the
+     * validator, so a step type declares its own vocabulary and nothing else.
+     *
+     * <p>Declaring one closes the shape: a field nobody named is refused, which is
+     * how "a workflow never carries executable code" becomes something the format
+     * enforces rather than something the engine happens not to run (§23.1).
+     *
+     * <p>Empty means no constraint. A step type that declares nothing keeps
+     * working — a third party adding one should not have to write a schema before
+     * anything runs at all.
+     */
+    default Optional<JsonNode> configSchema() {
+        return Optional.empty();
     }
 }

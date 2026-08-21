@@ -29,7 +29,7 @@ onunla çelişmez.
 | 14 | [application-capabilities.md](application-capabilities.md) | SDK worker'ları (`CapabilityWorker.Connect`), business code sınırı | **Tamam** (2026-08-20) |
 | 15 | _langchain-adapter_ | §35 opsiyonel LangChain provider'ı (`pipemesh-langchain`) | Planlanan |
 | 16 | _agent-loop_ | §9.9 sınırlı agent step'i — capability listesi, maxIterations, iterasyon izlenebilirliği | Planlanan |
-| 16b | _json-schemas_ | `workflow.schema.json` / `capability.schema.json` — §23.1'in şema seviyesindeki karşılığı | Planlanan |
+| 16b | [json-schemas.md](json-schemas.md) | §23.1'in şema seviyesindeki karşılığı — kapalı step şemaları | **Tamam** (2026-08-21) |
 | 17 | _multi-tenancy_ | §22.2 organizasyon izolasyonu, kota/metering — etiketleme değil *zorlama* | Planlanan |
 | 18 | _otel-exporter_ | §22.1 `pipemesh-opentelemetry` — OTLP üzerinden Datadog/New Relic/Grafana | **Tamam** (2026-08-20) |
 

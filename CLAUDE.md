@@ -95,7 +95,9 @@ passes the tests — say so rather than accepting it.
   step boundary, so a malformed shape fails there rather than three steps later as something
   strange.
 - **No inline code in workflow definitions.** A workflow names a capability; it never carries a body
-  to execute. Schemas must be closed (`additionalProperties: false`) (§23.1).
+  to execute, and the format enforces it: each step type declares its own fields through
+  `StepExecutor.configSchema()`, and anything else is refused at load time (§23.1). A step type that
+  declares nothing stays unconstrained — the default is "no rule", not "no fields".
 - **Reading a message picks a workflow and stops there.** An intent resolver returns a workflow id
   and nothing else — not a step to start at, not a branch to take. The moment it says more, the
   model is running the application (§19, §20, §37).

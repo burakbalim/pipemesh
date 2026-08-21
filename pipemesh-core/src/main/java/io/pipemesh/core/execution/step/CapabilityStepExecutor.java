@@ -40,6 +40,18 @@ import java.util.stream.Collectors;
  */
 public final class CapabilityStepExecutor implements StepExecutor {
 
+    private static final JsonNode SCHEMA = StepSchemas.parse("""
+            {
+              "properties": {
+                "capability": {"type": "string"},
+                "input":      {"type": "string"},
+                "output":     {"type": "string"},
+                "next":       {"type": "string"}
+              },
+              "required": ["capability"]
+            }
+            """);
+
     private static final String CAPABILITY = "capability";
     private static final String INPUT = "input";
     private static final String OUTPUT = "output";
@@ -57,6 +69,13 @@ public final class CapabilityStepExecutor implements StepExecutor {
     @Override
     public boolean supports(StepType type) {
         return StepType.CAPABILITY.equals(type);
+    }
+
+
+    /** What a capability step may say. Anything else is refused at load time (§23.1). */
+    @Override
+    public Optional<JsonNode> configSchema() {
+        return Optional.of(SCHEMA);
     }
 
     @Override

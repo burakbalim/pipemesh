@@ -46,6 +46,20 @@ import java.util.Optional;
  */
 public final class LlmStepExecutor implements StepExecutor {
 
+    private static final JsonNode SCHEMA = StepSchemas.parse("""
+            {
+              "properties": {
+                "model":        {"type": "string"},
+                "prompt":       {"type": "string"},
+                "output":       {"type": "string"},
+                "next":         {"type": "string"},
+                "stream":       {"type": "boolean"},
+                "outputSchema": {}
+              },
+              "required": ["model", "prompt", "output", "next"]
+            }
+            """);
+
     private static final String MODEL = "model";
     private static final String PROMPT = "prompt";
     private static final String OUTPUT = "output";
@@ -87,6 +101,13 @@ public final class LlmStepExecutor implements StepExecutor {
     @Override
     public boolean supports(StepType type) {
         return StepType.LLM.equals(type);
+    }
+
+
+    /** What a llm step may say. Anything else is refused at load time (§23.1). */
+    @Override
+    public Optional<JsonNode> configSchema() {
+        return Optional.of(SCHEMA);
     }
 
     @Override
