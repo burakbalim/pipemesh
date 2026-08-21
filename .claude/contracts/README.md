@@ -37,6 +37,10 @@ onunla çelişmez.
 | 20 | [streaming-progress.md](streaming-progress.md) | §30.1 — `step.started`, `execution.recovered`, akış filtresi ve izni | **Tamam** (2026-08-21) |
 | 21 | [runtime-distribution.md](runtime-distribution.md) | §26.3 — çalıştırılabilir runtime, kendi şeması, on-prem tek düğüm | **Tamam** (2026-08-21) |
 | 22 | [cloud-deployment.md](cloud-deployment.md) | §30.2 — süreçler arası izleme, üç deployment, TLS, e-posta | **Tamam** (2026-08-22) |
+| 23 | [billing-and-payment.md](billing-and-payment.md) | Ödeme sağlayıcısı, abonelik durumu, plan değişimi | Draft |
+| 24 | [backlog-metrics.md](backlog-metrics.md) | §22.1 — bekleyen işin yaşı, dispatcher ölçekleme sinyali | Draft |
+| 25 | [release-and-versioning.md](release-and-versioning.md) | §26.1 — sürüm numarasının vaadi, image ve SDK yayını | Draft |
+| 26 | [update-replay.md](update-replay.md) | §30.1 — dayanıklı imleç, kaçırılan olayların kurtarılması | Draft |
 
 Faz eşlemesi için DESIGN.md §45'e bakın: #1 Phase 1'i, #2–4 Phase 2'yi, #6–7 Phase 3'ü,
 #9–11 Phase 4'ü karşılar. #12 fazlardan bağımsız — #1 tamamlanır tamamlanmaz başlayabilir.
