@@ -608,7 +608,11 @@ the workflow chooses →  that this step runs, what it may reach, when it must s
 
 * the capability list is declared in the step, not discovered by the model,
 * `maxIterations` is mandatory — an unbounded loop is not a workflow,
-* every iteration is a step-history entry, so the loop stays observable rather than opaque (§22),
+* every turn is recorded on the step's history entry — which capability was
+  reached, what came back, what the whole loop cost — so the loop stays
+  observable rather than opaque (§22). Not one row per turn: the history table
+  records what the *engine* ran, and inventing rows for steps it never scheduled
+  would cost the table its meaning,
 * the loop cannot alter the workflow graph, request an approval on its own or reach a capability the
   step did not list.
 

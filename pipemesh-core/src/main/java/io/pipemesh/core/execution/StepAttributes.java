@@ -16,6 +16,9 @@ public final class StepAttributes {
     public static final String LLM_INPUT_TOKENS = "llm.input_tokens";
     public static final String LLM_OUTPUT_TOKENS = "llm.output_tokens";
 
+    public static final String AGENT_TURNS = "agent.turns";
+    public static final String AGENT_HISTORY = "agent.history";
+
     public static final String CAPABILITY_ID = "capability.id";
     public static final String CAPABILITY_EXECUTION_TYPE = "capability.execution_type";
 

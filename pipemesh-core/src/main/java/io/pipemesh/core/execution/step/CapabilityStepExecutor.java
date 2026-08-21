@@ -6,6 +6,7 @@ import io.pipemesh.core.capability.CapabilityCall;
 import io.pipemesh.core.capability.CapabilityDescriptor;
 import io.pipemesh.core.capability.CapabilityId;
 import io.pipemesh.core.capability.CapabilityProvider;
+import io.pipemesh.core.capability.CapabilityInvoker;
 import io.pipemesh.core.capability.CapabilityRegistry;
 import io.pipemesh.core.capability.CapabilityResult;
 import io.pipemesh.core.execution.ExecutionContext;
@@ -21,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Invokes a capability by name (§9.2).
@@ -57,20 +57,20 @@ public final class CapabilityStepExecutor implements StepExecutor {
     private static final String OUTPUT = "output";
     private static final String NEXT = "next";
 
-    private final CapabilityRegistry capabilities;
-    private final Map<String, CapabilityProvider> providers;
+    private final CapabilityInvoker invoker;
 
     public CapabilityStepExecutor(CapabilityRegistry capabilities, List<CapabilityProvider> providers) {
-        this.capabilities = Objects.requireNonNull(capabilities, "capability registry");
-        this.providers = providers.stream().collect(
-                Collectors.toUnmodifiableMap(CapabilityProvider::type, provider -> provider));
+        this(new CapabilityInvoker(capabilities, providers));
+    }
+
+    public CapabilityStepExecutor(CapabilityInvoker invoker) {
+        this.invoker = Objects.requireNonNull(invoker, "capability invoker");
     }
 
     @Override
     public boolean supports(StepType type) {
         return StepType.CAPABILITY.equals(type);
     }
-
 
     /** What a capability step may say. Anything else is refused at load time (§23.1). */
     @Override
@@ -83,39 +83,15 @@ public final class CapabilityStepExecutor implements StepExecutor {
         JsonNode config = step.config();
         CapabilityId id = CapabilityId.of(required(config, CAPABILITY));
 
-        Optional<CapabilityDescriptor> capability = capabilities.find(id);
-        if (capability.isEmpty()) {
-            return new StepResult.Failed("capability.unknown",
-                    "no capability registered as '" + id + "'", false);
-        }
-        CapabilityDescriptor descriptor = capability.get();
+        CapabilityResult result = invoker.invoke(id, inputFor(config, context), callOf(step, context));
 
-        CapabilityCall call = callOf(step, context);
-
-        List<String> missing = call.principal().missingFrom(descriptor.permissions());
-        if (!missing.isEmpty()) {
-            // Refused, not failed: trying again with the same caller changes
-            // nothing, and a retry policy should not spend attempts on it (§23).
-            return new StepResult.Failed("capability.forbidden",
-                    "'" + context.principal() + "' may not use '" + id + "': missing " + missing,
-                    false);
-        }
-
-        CapabilityProvider provider = providers.get(descriptor.executionType());
-        if (provider == null) {
-            return new StepResult.Failed("capability.no_provider",
-                    "capability '" + id + "' needs a '" + descriptor.executionType()
-                            + "' provider, which is not registered", false);
-        }
-
-        CapabilityResult result = provider.invoke(descriptor, inputFor(config, context), call);
-        return switch (retryableOnly(descriptor, result)) {
+        return switch (result) {
             case CapabilityResult.Success success -> new StepResult.Continue(
                     StepId.of(required(config, NEXT)),
                     Map.of(required(config, OUTPUT), success.output()),
-                    attributesOf(descriptor));
+                    attributesOf(id));
             case CapabilityResult.Failure failure -> new StepResult.Failed(
-                    failure.code(), failure.message(), failure.retryable(), attributesOf(descriptor));
+                    failure.code(), failure.message(), failure.retryable(), attributesOf(id));
         };
     }
 
@@ -136,7 +112,7 @@ public final class CapabilityStepExecutor implements StepExecutor {
         if (id.isBlank()) {
             return true;
         }
-        return capabilities.find(CapabilityId.of(id))
+        return invoker.find(CapabilityId.of(id))
                 .map(CapabilityDescriptor::idempotent)
                 .orElse(true);
     }
@@ -145,22 +121,6 @@ public final class CapabilityStepExecutor implements StepExecutor {
         return new CapabilityCall(
                 context.organization(), context.executionId(), step.id(),
                 context.traceParent(), context.principal());
-    }
-
-    /**
-     * Strips the retryable flag from a capability that declared itself
-     * non-idempotent.
-     *
-     * <p>A transport failure leaves one question unanswered — did the call
-     * arrive? — and for a capability that charges a card, retrying on that
-     * uncertainty is how a customer gets billed twice. The registration is the
-     * only place that knows, so this is where the retry is refused (§17).
-     */
-    private CapabilityResult retryableOnly(CapabilityDescriptor descriptor, CapabilityResult result) {
-        if (!(result instanceof CapabilityResult.Failure failure) || descriptor.idempotent()) {
-            return result;
-        }
-        return new CapabilityResult.Failure(failure.code(), failure.message(), false);
     }
 
     /** An absent {@code input} means the capability takes the whole context. */
@@ -172,11 +132,14 @@ public final class CapabilityStepExecutor implements StepExecutor {
         return JsonPath.parse(input).read(context.variables());
     }
 
-    private Map<String, JsonNode> attributesOf(CapabilityDescriptor descriptor) {
+    private Map<String, JsonNode> attributesOf(CapabilityId id) {
         JsonNodeFactory json = JsonNodeFactory.instance;
-        return Map.of(
-                StepAttributes.CAPABILITY_ID, json.textNode(descriptor.id().value()),
-                StepAttributes.CAPABILITY_EXECUTION_TYPE, json.textNode(descriptor.executionType()));
+        return invoker.find(id)
+                .map(capability -> Map.of(
+                        StepAttributes.CAPABILITY_ID, (JsonNode) json.textNode(id.value()),
+                        StepAttributes.CAPABILITY_EXECUTION_TYPE,
+                        json.textNode(capability.executionType())))
+                .orElseGet(() -> Map.of(StepAttributes.CAPABILITY_ID, json.textNode(id.value())));
     }
 
     private String required(JsonNode config, String field) {

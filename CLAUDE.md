@@ -116,6 +116,9 @@ passes the tests — say so rather than accepting it.
 - **Runtime / SDK / Provider stay separate.** The runtime is the engine, an SDK is access to it, a
   provider is how it reaches the outside world. LangChain, OpenAI, MCP and managed agent platforms
   are all providers — optional adapters, never core dependencies (§26.2, §35).
+- **One way to reach a capability.** Both the capability step and the agent step go through
+  `CapabilityInvoker`, so permissions, idempotency and telemetry live in one place. A second route
+  would be a way around the permission check, and a boundary with two doors is not one.
 - **Adding a step type must not require touching `WorkflowExecutor`.** New primitives arrive as new
   `StepExecutor` implementations plus a schema entry. If the engine has to change, the abstraction is
   leaking (§27, §46).
