@@ -1,0 +1,23 @@
+{
+  "intents": [
+    {
+      "id": "book_venue",
+      "workflow": "venue_booking",
+      "description": "The user wants to book a venue",
+      "matches": [
+        "book a venue",
+        "find a venue",
+        "mekan ay\u0131r"
+      ]
+    },
+    {
+      "id": "check_discount",
+      "workflow": "discount_check",
+      "description": "The user asks what discount applies",
+      "matches": [
+        "discount",
+        "indirim"
+      ]
+    }
+  ]
+}

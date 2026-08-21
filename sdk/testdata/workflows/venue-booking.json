@@ -1,0 +1,13 @@
+{
+  "id": "venue_booking",
+  "version": "1.0",
+  "entry": "check_price",
+  "steps": [
+    {"id": "check_price", "type": "condition", "expression": "$.input.price > 100",
+     "onTrue": "approval", "onFalse": "booked"},
+    {"id": "approval", "type": "human_approval", "message": "Book this venue?",
+     "onApproved": "booked", "onRejected": "cancelled"},
+    {"id": "booked", "type": "terminal", "status": "COMPLETED"},
+    {"id": "cancelled", "type": "terminal", "status": "CANCELLED"}
+  ]
+}

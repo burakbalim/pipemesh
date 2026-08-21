@@ -16,10 +16,10 @@ import * as readline from "node:readline";
 import { ExecutionHandle, PipeMesh, PipeMeshError, Update, isTerminal, isWaiting } from "../src/client";
 
 const REPO = path.resolve(__dirname, "..", "..", "..", "..");
-const CLASSPATH_FILE = path.join(REPO, "pipemesh-grpc", "target", "test-classpath.txt");
+const CLASSPATH_FILE = path.join(REPO, "pipemesh-runtime", "target", "test-classpath.txt");
 const CLASSES = [
-  path.join(REPO, "pipemesh-grpc", "target", "classes"),
-  path.join(REPO, "pipemesh-grpc", "target", "test-classes"),
+  path.join(REPO, "pipemesh-runtime", "target", "classes"),
+  path.join(REPO, "pipemesh-runtime", "target", "test-classes"),
 ];
 
 let runtime: ChildProcess;
@@ -28,7 +28,7 @@ let mesh: PipeMesh;
 function classpath(): string {
   if (!fs.existsSync(CLASSPATH_FILE)) {
     throw new Error(
-      "run `mvn -pl pipemesh-grpc dependency:build-classpath " +
+      "run `mvn -pl pipemesh-runtime dependency:build-classpath " +
         "-Dmdep.outputFile=target/test-classpath.txt` first",
     );
   }
@@ -36,7 +36,7 @@ function classpath(): string {
 }
 
 function startRuntime(): Promise<string> {
-  runtime = spawn("java", ["-cp", classpath(), "io.pipemesh.grpc.TestRuntimeServer"], {
+  runtime = spawn("java", ["-cp", classpath(), "io.pipemesh.runtime.TestRuntimeServer"], {
     stdio: ["ignore", "pipe", "ignore"],
   });
 

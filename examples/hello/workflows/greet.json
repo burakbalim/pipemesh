@@ -1,0 +1,11 @@
+{
+  "id": "greet",
+  "version": "1.0",
+  "entry": "is_vip",
+  "steps": [
+    {"id": "is_vip", "type": "condition", "expression": "$.input.orders > 10",
+     "onTrue": "welcome_back", "onFalse": "welcome"},
+    {"id": "welcome_back", "type": "terminal", "status": "COMPLETED"},
+    {"id": "welcome", "type": "terminal", "status": "COMPLETED"}
+  ]
+}

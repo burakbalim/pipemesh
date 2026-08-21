@@ -1,0 +1,9 @@
+# Build output and installed dependencies never belong in a build context: they
+# are large, they are stale, and copying them in is how a container ends up
+# running something other than what was just built.
+**/target/
+**/node_modules/
+**/dist/
+**/.venv/
+**/__pycache__/
+.git/

@@ -16,10 +16,10 @@ import { PipeMesh } from "../src/client";
 import { CapabilityFailure, CapabilityFunction, PipeMeshWorker } from "../src/worker";
 
 const REPO = path.resolve(__dirname, "..", "..", "..", "..");
-const CLASSPATH_FILE = path.join(REPO, "pipemesh-grpc", "target", "test-classpath.txt");
+const CLASSPATH_FILE = path.join(REPO, "pipemesh-runtime", "target", "test-classpath.txt");
 const CLASSES = [
-  path.join(REPO, "pipemesh-grpc", "target", "classes"),
-  path.join(REPO, "pipemesh-grpc", "target", "test-classes"),
+  path.join(REPO, "pipemesh-runtime", "target", "classes"),
+  path.join(REPO, "pipemesh-runtime", "target", "test-classes"),
 ];
 
 let runtime: ChildProcess;
@@ -28,7 +28,7 @@ let mesh: PipeMesh;
 
 function startRuntime(): Promise<string> {
   const classpath = [...CLASSES, fs.readFileSync(CLASSPATH_FILE, "utf8").trim()].join(":");
-  runtime = spawn("java", ["-cp", classpath, "io.pipemesh.grpc.TestRuntimeServer"], {
+  runtime = spawn("java", ["-cp", classpath, "io.pipemesh.runtime.TestRuntimeServer"], {
     stdio: ["ignore", "pipe", "ignore"],
   });
 

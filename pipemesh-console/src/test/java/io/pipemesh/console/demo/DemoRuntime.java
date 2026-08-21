@@ -73,7 +73,15 @@ public class DemoRuntime {
         ExecutionDispatcher dispatcher = new ExecutionDispatcher(
                 workflows, stateStore, executor,
                 new PostgresExecutionLeases(dataSource), "console-demo");
-        new RecoveryScheduler(dispatcher::dispatchOnce, Duration.ofMillis(100), failure -> {
+        // Two seconds, not milliseconds: the demo starts an execution and then
+        // opens its watch, so a driver that pounces immediately can finish the
+        // work before anybody is listening. That is a real property — the screen
+        // then shows a finished execution instead of a running one, and since
+        // WatchExecution closes cleanly on a terminal execution it is no longer a
+        // hang. But it makes a test of live progress a coin flip, and the
+        // interval is the honest knob: in production it is how often a driver
+        // looks for work, and it is never a hundred milliseconds.
+        new RecoveryScheduler(dispatcher::dispatchOnce, Duration.ofSeconds(2), failure -> {
         }).start();
 
         return new PipeMeshServer(

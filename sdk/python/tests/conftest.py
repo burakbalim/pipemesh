@@ -16,10 +16,10 @@ import grpc
 import pytest
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
-CLASSPATH_FILE = REPO / "pipemesh-grpc" / "target" / "test-classpath.txt"
+CLASSPATH_FILE = REPO / "pipemesh-runtime" / "target" / "test-classpath.txt"
 CLASSES = [
-    REPO / "pipemesh-grpc" / "target" / "classes",
-    REPO / "pipemesh-grpc" / "target" / "test-classes",
+    REPO / "pipemesh-runtime" / "target" / "classes",
+    REPO / "pipemesh-runtime" / "target" / "test-classes",
 ]
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -28,7 +28,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 def _classpath() -> str:
     if not CLASSPATH_FILE.exists():
         pytest.skip(
-            "run `mvn -pl pipemesh-grpc dependency:build-classpath "
+            "run `mvn -pl pipemesh-runtime dependency:build-classpath "
             "-Dmdep.outputFile=target/test-classpath.txt` first")
     parts = [str(path) for path in CLASSES] + [CLASSPATH_FILE.read_text().strip()]
     return ":".join(parts)
@@ -37,7 +37,7 @@ def _classpath() -> str:
 @pytest.fixture(scope="session")
 def runtime_address() -> str:
     process = subprocess.Popen(
-        ["java", "-cp", _classpath(), "io.pipemesh.grpc.TestRuntimeServer"],
+        ["java", "-cp", _classpath(), "io.pipemesh.runtime.TestRuntimeServer"],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,

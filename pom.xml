@@ -28,6 +28,7 @@
         <module>pipemesh-mcp</module>
         <module>pipemesh-opentelemetry</module>
         <module>pipemesh-grpc</module>
+        <module>pipemesh-runtime</module>
         <module>pipemesh-console</module>
     </modules>
 

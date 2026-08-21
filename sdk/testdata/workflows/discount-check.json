@@ -1,0 +1,11 @@
+{
+  "id": "discount_check",
+  "version": "1.0",
+  "entry": "discount",
+  "steps": [
+    {"id": "discount", "type": "capability", "capability": "calculate_discount",
+     "input": "$.input", "output": "discount", "next": "done",
+     "retry": {"maxAttempts": 4, "initialDelay": "200ms"}},
+    {"id": "done", "type": "terminal", "status": "COMPLETED"}
+  ]
+}

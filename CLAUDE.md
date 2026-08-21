@@ -20,6 +20,9 @@ README.md                      # public overview
 .claude/contracts/README.md    # index: DESIGN.md → 15 planned contracts
 .claude/contracts/*.md         # one contract per implementable slice
 pipemesh-core/                 # workflow model, execution contracts, runtime API
+pipemesh-runtime/              # the runnable runtime: config directory in, gRPC server out
+pipemesh-console/              # sign-up, plans, quota, web console — an application, not a library
+deploy/on-premise/             # single-node compose for an install somebody else operates
 ```
 
 Read `DESIGN.md` before making architectural claims. Section numbers (§9.8, §26.1, …) are referenced
@@ -123,6 +126,11 @@ passes the tests — say so rather than accepting it.
 - **One way to reach a capability.** Both the capability step and the agent step go through
   `CapabilityInvoker`, so permissions, idempotency and telemetry live in one place. A second route
   would be a way around the permission check, and a boundary with two doors is not one.
+- **A deployment difference is a composition, never a branch.** On-premise and cloud are the
+  same artifacts wired differently: who resolves principals, whether a quota interceptor is in
+  front, whether this process dispatches, which store backs it. The first `if (cloud)` inside a
+  library module is the day that boundary failed — `ModuleBoundaryTest` holds the direction, and
+  nothing else should need to.
 - **Adding a step type must not require touching `WorkflowExecutor`.** New primitives arrive as new
   `StepExecutor` implementations plus a schema entry. If the engine has to change, the abstraction is
   leaking (§27, §46).

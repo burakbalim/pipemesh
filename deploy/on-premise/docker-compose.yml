@@ -1,0 +1,49 @@
+# A single-node PipeMesh, for an on-premise install.
+#
+# The database is here only because a single node has to get one somewhere. A
+# deployment that already has PostgreSQL points PIPEMESH_DB_URL at it and deletes
+# this service — the runtime does not operate a database, it connects to one.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pipemesh
+      POSTGRES_PASSWORD: ${PIPEMESH_DB_PASSWORD:-pipemesh}
+      POSTGRES_DB: pipemesh
+    volumes:
+      - pipemesh-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pipemesh"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  runtime:
+    build:
+      context: ../..
+      dockerfile: pipemesh-runtime/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PIPEMESH_CONFIG: /etc/pipemesh
+      PIPEMESH_DB_URL: jdbc:postgresql://postgres:5432/pipemesh
+      PIPEMESH_DB_USER: pipemesh
+      PIPEMESH_DB_PASSWORD: ${PIPEMESH_DB_PASSWORD:-pipemesh}
+      # One node serves callers and drives executions. Splitting these is what a
+      # deployment does when it needs to scale them apart (§28.1).
+      PIPEMESH_DISPATCH: "on"
+      # Model keys come from the environment, never from the configuration files
+      # — files are shared, secrets are not.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      # The workflows this runtime serves. Yours, mounted in; nothing is baked
+      # into the image. The default needs no model and no key, because a first
+      # run that demands a vendor account teaches nothing about the runtime.
+      - ${PIPEMESH_CONFIG_DIR:-../../examples/hello}:/etc/pipemesh:ro
+    ports:
+      - "${PIPEMESH_PORT:-8080}:8080"
+
+volumes:
+  pipemesh-data:

@@ -54,6 +54,7 @@ public final class SchemaMigrator {
     public void migrate() {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
+            lock(connection);
             createHistoryTable(connection);
             List<String> applied = appliedMigrations(connection);
             for (String migration : migrations) {
@@ -64,6 +65,25 @@ public final class SchemaMigrator {
             connection.commit();
         } catch (SQLException failure) {
             throw new StateStoreException("schema migration failed", failure);
+        }
+    }
+
+    /**
+     * Serialises migration across processes.
+     *
+     * <p>Two replicas starting together would otherwise both read "not applied"
+     * and both run the same {@code CREATE TABLE}; one of them fails, and it fails
+     * on every deploy of more than one node. A transaction alone does not prevent
+     * this — it isolates reads, it does not stop two writers from deciding the
+     * same thing.
+     *
+     * <p>Held until the transaction ends, so the loser waits and then finds the
+     * work already done. The number is arbitrary but must stay fixed: it is the
+     * name of the lock.
+     */
+    private void lock(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("SELECT pg_advisory_xact_lock(8145721)");
         }
     }
 

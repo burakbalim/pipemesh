@@ -1,0 +1,6 @@
+{
+  "id": "policy_check",
+  "version": "1.0",
+  "entry": "done",
+  "steps": [{"id": "done", "type": "terminal", "status": "COMPLETED"}]
+}

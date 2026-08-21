@@ -21,6 +21,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ModuleBoundaryTest {
 
+    /**
+     * The library modules. {@code pipemesh-runtime} and {@code pipemesh-console}
+     * are applications that compose them, and nothing here may point at either.
+     */
     private static final List<String> RUNTIME_MODULES = List.of(
             "pipemesh-core", "pipemesh-postgres", "pipemesh-grpc",
             "pipemesh-mcp", "pipemesh-openai-compatible", "pipemesh-opentelemetry");
@@ -34,6 +38,8 @@ class ModuleBoundaryTest {
 
             assertTrue(!pom.contains("pipemesh-console"),
                     module + " depends on the console; the dependency runs one way only");
+            assertTrue(!pom.contains("pipemesh-runtime"),
+                    module + " depends on the runtime application; the dependency runs one way only");
         }
     }
 
@@ -48,6 +54,19 @@ class ModuleBoundaryTest {
             assertTrue(!pom.contains("org.springframework"),
                     module + " carries Spring; core/ is framework-free by design");
         }
+    }
+
+    /**
+     * The console composes the runtime library modules; it must not inherit the
+     * runnable runtime. Two applications, side by side — not one built on the
+     * other (§26.3).
+     */
+    @Test
+    void theConsoleDoesNotDependOnTheRunnableRuntime() throws IOException {
+        String pom = Files.readString(Path.of("pom.xml").toAbsolutePath());
+
+        assertTrue(!pom.contains("pipemesh-runtime"),
+                "the console is a composition beside the runtime, not one built on it");
     }
 
     @Test

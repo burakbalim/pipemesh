@@ -120,6 +120,15 @@ dependencies of the core. The LangChain adapter does not even depend on LangChai
 anything with an `invoke()` method, and a chain reaches the runtime over the same worker
 connection any other application code uses.
 
+## Running it
+
+```bash
+cd deploy/on-premise && docker compose up
+```
+
+One node, no API key, no account: `examples/hello` is a workflow with one decision and two
+endings. See [deploy/on-premise](deploy/on-premise) for what that install is and is not.
+
 ## Deployment
 
 ```text

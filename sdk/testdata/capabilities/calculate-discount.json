@@ -1,0 +1,11 @@
+{
+  "id": "calculate_discount",
+  "description": "Tier-based discount",
+  "kind": "application",
+  "owner": "billing-team",
+  "version": "1.0",
+  "execution": {
+    "type": "worker",
+    "capability": "calculate_discount"
+  }
+}
