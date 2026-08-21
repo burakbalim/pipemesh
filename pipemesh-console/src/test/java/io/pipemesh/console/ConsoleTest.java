@@ -48,5 +48,7 @@ public abstract class ConsoleTest {
     void emptyAccounts() {
         jdbc.execute("TRUNCATE console_api_key, console_session, console_verification,"
                 + " console_user, console_organization CASCADE");
+        // Executions are the usage ledger (§39.1), so they are test data too.
+        jdbc.execute("TRUNCATE workflow_execution CASCADE");
     }
 }

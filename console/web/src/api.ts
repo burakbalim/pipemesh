@@ -69,6 +69,30 @@ export interface IssuedApiKey {
   secret: string;
 }
 
+export interface Plan {
+  id: string;
+  name: string;
+  /** Zero means no limit, the same convention a workflow budget uses. */
+  maxExecutions: number;
+  maxTokens: number;
+  maxCostMicros: number;
+  periodDays: number;
+  permissions: string[];
+}
+
+export interface Usage {
+  periodStart: string;
+  periodEnd: string;
+  executions: number;
+  tokens: number;
+  costMicros: number;
+}
+
+export interface UsageView {
+  plan: Plan;
+  used: Usage;
+}
+
 export const api = {
   register(organizationName: string, email: string, password: string): Promise<Organization> {
     return call("/organizations", {
@@ -87,6 +111,10 @@ export const api = {
 
   signOut(): Promise<void> {
     return call("/sessions", { method: "DELETE" });
+  },
+
+  usage(): Promise<UsageView> {
+    return call("/usage");
   },
 
   apiKeys(): Promise<ApiKey[]> {

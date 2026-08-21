@@ -150,3 +150,26 @@ section h2 {
   margin-top: 2.5rem;
   font-size: 1.15rem;
 }
+
+.usage {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 1rem;
+}
+
+.usage li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.usage strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.15rem;
+}

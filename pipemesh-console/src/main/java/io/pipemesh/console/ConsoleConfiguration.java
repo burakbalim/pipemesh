@@ -26,13 +26,25 @@ public class ConsoleConfiguration {
     }
 
     /**
-     * Applies the console's own tables, reusing the runtime's migrator so both
-     * schemas report into one history table (§26.2 — the console depends on the
-     * runtime, never the other way round).
+     * Applies both schemas, runtime first.
+     *
+     * <p>The console is the deployment, so it owns getting the database into
+     * shape — and it reads the runtime's tables: usage comes off
+     * {@code workflow_execution} rather than being counted a second time (§39.1).
+     * Migrating only half would leave a console that starts and then cannot
+     * answer what anybody has used.
+     *
+     * <p>One migrator and one history table, so "what has been applied" has one
+     * answer. The dependency still runs one way: the console knows about the
+     * runtime's schema, and the runtime knows nothing about the console's.
      */
     @Bean
     public InitializingBean consoleSchema(DataSource dataSource) {
-        return () -> new SchemaMigrator(
-                dataSource, MIGRATIONS, List.of("V101__console_identity.sql", "V102__console_api_key.sql")).migrate();
+        return () -> {
+            new SchemaMigrator(dataSource).migrate();
+            new SchemaMigrator(dataSource, MIGRATIONS, List.of(
+                    "V101__console_identity.sql",
+                    "V102__console_api_key.sql")).migrate();
+        };
     }
 }

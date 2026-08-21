@@ -35,9 +35,18 @@ public class IdentityRepository {
         this.jdbc = jdbc;
     }
 
+    /**
+     * {@code created_at} is written rather than left to the column default: the
+     * period a subscription is billed in counts from this instant, and taking it
+     * from the database's clock while measuring it against the application's is
+     * two clocks deciding one number.
+     */
     public void insertOrganization(Organization organization) {
-        jdbc.update("INSERT INTO console_organization (id, name, plan_id) VALUES (?, ?, ?)",
-                organization.id(), organization.name(), organization.planId());
+        jdbc.update("""
+                INSERT INTO console_organization (id, name, plan_id, created_at)
+                VALUES (?, ?, ?, ?)
+                """, organization.id(), organization.name(), organization.planId(),
+                Timestamp.from(organization.createdAt()));
     }
 
     public void insertUser(ConsoleUser user) {

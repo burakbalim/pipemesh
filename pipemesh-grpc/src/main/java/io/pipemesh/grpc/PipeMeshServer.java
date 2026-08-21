@@ -2,6 +2,7 @@ package io.pipemesh.grpc;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerInterceptor;
 import io.pipemesh.core.execution.RecoveryScheduler;
 import io.pipemesh.core.execution.WorkflowRuntime;
 
@@ -88,14 +89,39 @@ public final class PipeMeshServer implements AutoCloseable {
             PrincipalResolver principals,
             List<String> watchPermissions) {
 
+        this(runtime, broker, port, recovery, workers, principals, watchPermissions, List.of());
+    }
+
+    /**
+     * @param interceptors the deployment's own concerns at the boundary, applied
+     *                     before the service is reached. A subscription quota, a
+     *                     rate limit, an audit trail — none of which the runtime
+     *                     knows about, and all of which belong in front of it
+     *                     rather than inside it (§3).
+     */
+    public PipeMeshServer(
+            WorkflowRuntime runtime,
+            ExecutionUpdateBroker broker,
+            int port,
+            RecoveryScheduler recovery,
+            WorkerRegistry workers,
+            PrincipalResolver principals,
+            List<String> watchPermissions,
+            List<ServerInterceptor> interceptors) {
+
         Objects.requireNonNull(runtime, "runtime");
         Objects.requireNonNull(principals, "principal resolver");
         Objects.requireNonNull(broker, "broker");
+        Objects.requireNonNull(interceptors, "interceptors");
         this.recovery = recovery;
 
         ServerBuilder<?> builder = ServerBuilder.forPort(port)
-                .intercept(new CallMetadata())
+                // Registered last, so it runs first: everything after it can read
+                // the call's metadata, including the deployment's own interceptors.
                 .addService(new PipeMeshService(runtime, broker, principals, watchPermissions));
+        interceptors.forEach(builder::intercept);
+        builder.intercept(new CallMetadata());
+
         if (workers != null) {
             builder.addService(new CapabilityWorkerService(workers));
         }

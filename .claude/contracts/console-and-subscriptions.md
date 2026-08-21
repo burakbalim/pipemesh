@@ -335,8 +335,53 @@ anahtarı devralabildiği bir console olurdu.
 `-parameters` olmadan atıyor, ve `spring-boot-starter-parent` kullanmadığımız için bayrak
 gelmiyordu. Console modülüne eklendi; çalışma zamanı modüllerine bulaşmıyor.
 
-### Sıradaki dilimler
+### Dilim B — plan, kota, kullanım (2026-08-21)
 
-- **B** — plan, kota, kullanım sayacı
+8 yeni test — toplam 415 Java.
+
+**Contract'ın şeması değişti, gerekçesi contract'ın kendi cümlesi.** `console_usage` tablosu
+yazılmıştı; yazılmadı. Contract zaten şunu söylüyordu: *"geçmişi `workflow_execution` zaten
+tutuyor ve iki yerde tutmak ikisinin ayrışması demek."* Sayaç tam olarak o ikinci yer olurdu —
+yazma ile artırma arasında çöken bir process, bir backfill, bir bug: her biri iki sayıyı
+ayırır. Kullanım artık `workflow_execution` üzerinde bir `SUM`. Bedeli her kota kontrolünde bir
+toplama; sayaç ileride bir **önbellek** olarak eklenebilir, çünkü türetilebilir olan şey
+önbelleklenebilir.
+
+**Kota motora girmiyor, sınırda duruyor.** `QuotaInterceptor` yalnızca `StartExecution` ve
+`ProcessMessage`'ı kesiyor. Okuma, devam ettirme ve izleme plana bir şey harcamıyor; onları
+reddetmek birinin zaten ödediği işi ortada bırakırdı.
+
+`RESOURCE_EXHAUSTED`, `PERMISSION_DENIED` değil: çağıranda bir sorun yok ve aynı çağrı gelecek
+dönem çalışacak. İkisini karıştırmak, "tekrar deneme" ile "erken denedin" arasındaki farkı
+silmek olur.
+
+**Ön-kontrolün `>=`'i, #11'in `>`'inden farklı ve nedeni yazılı.** Workflow bütçesi *sonradan*
+soruyor — "koşan şey aştı mı?" — dolayısıyla sınıra tam oturmak sorun değil. Kota *önceden*
+soruyor: elli/elli olmak, bir sonrakinin elli birinci olması demek.
+
+**Dönem hesabı takvim ayına değil, hesabın açıldığı güne bağlı.** Ayın 30'unda kaydolan birine
+bir günlük dönem vermek istemiyoruz.
+
+**Deployment iki şemayı da kuruyor.** Console, çalışma zamanının migration'larını da koşuyor —
+kendi verisi onun tablolarını okuyor, ve yarısını kurmak "açılan ama ne harcandığını
+söyleyemeyen" bir console demek. Tek migrator, tek geçmiş tablosu; bağımlılık yine tek yönlü.
+
+**`PipeMeshServer` artık interceptor kabul ediyor.** Bir deployment'ın kendi kaygılarını
+(kota, hız sınırı, denetim izi) sınıra koyabilmesi gerekiyordu ve motorun içine koymak §3'ü
+bozardı.
+
+**Yolda üç şey:**
+
+1. **Ekleyeceğim indeks zaten vardı.** `workflow_execution_by_organization` V001'den beri
+   duruyor ve `organization_id` ile başlıyor — daraltmayı yapan sütun o. Migration silindi;
+   hiçbir şey yapmayan bir migration dosyası, olmayan dosyadan kötü.
+2. **İki saat bir sayıya karar veriyordu.** `console_organization.created_at` veritabanının
+   `now()`'ıyla yazılıyor, dönem aritmetiği ise enjekte edilen `Clock`'la ölçülüyordu.
+   Artık uygulama yazıyor.
+3. **Test verim kendi içinde tutarsızdı** — "bir saat önce" koşan bir execution, "şimdi"
+   yaratılmış bir organizasyondan önce olamaz. Organizasyon on gün önce yaratılıyor.
+
+### Sıradaki dilim
+
 - **C** — demo ekranı
 
