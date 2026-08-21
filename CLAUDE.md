@@ -148,6 +148,11 @@ passes the tests — say so rather than accepting it.
   resources released; it resumes on an external signal (§16).
 - **Resume is idempotent.** The same approval decision delivered twice must not advance the
   execution twice.
+- **An execution finishes in the graph it started in.** The registry is keyed by
+  `(id, version)`; a start without a version picks the newest *once* and writes it to the record,
+  and every resume reads the version back from there. Whoever resumes — an approver, a payment
+  service, a recovery sweep — does not know where the execution stopped, so which graph it
+  continues in cannot be their choice (§24.1).
 - **Trace context is persisted with the state.** An execution resumed after a restart must attach to
   the same trace, or "observable execution" breaks exactly where it matters most.
 - **Every execution carries its organization**, and every span and metric is labelled with it. A

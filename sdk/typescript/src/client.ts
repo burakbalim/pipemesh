@@ -145,13 +145,16 @@ export class PipeMesh {
   execute(
     workflowId: string,
     input: Record<string, unknown> = {},
-    options: { organization?: string; traceparent?: string } = {},
+    options: { organization?: string; traceparent?: string; version?: string } = {},
   ): Promise<ExecutionHandle> {
     return this.unary<ExecutionHandle>("StartExecution", {
       workflowId,
       input: toStruct(input),
       organizationId: options.organization ?? this.organization,
       traceparent: options.traceparent ?? "",
+      // Empty means "newest", chosen once at the start and written to the
+      // execution's record — a deploy mid-run does not move it (§24).
+      workflowVersion: options.version ?? "",
     }, toHandle);
   }
 

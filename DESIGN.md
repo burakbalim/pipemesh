@@ -1405,6 +1405,42 @@ An execution should record exact versions:
 
 This enables reproducibility.
 
+## 24.1 An execution finishes in the graph it started in
+
+Recording a version is not the same as honouring one. A registry keyed by id alone would let a
+deploy move a suspended execution to a different graph mid-flight — and with approvals and events
+in the language (§9.7, §16), suspended for days is the ordinary case, not the exception. So the
+registration key is the pair:
+
+```text
+register:  (id, version) → graph        a new version does not displace the old
+start:     no version given → newest    chosen once, then written to the record
+resume:    always the record's version  not a preference, a fact
+```
+
+Which version a suspended execution continues on cannot be a choice made at resume time, because
+whoever is resuming — an approver, a payment service, a recovery sweep — does not know where the
+execution stopped or what that step meant.
+
+**"Newest" needs an order, so the version language is narrow:** dot-separated numbers, compared as
+numbers. `"10.0"` is newer than `"9.0"`, which text ordering gets backwards. Anything that is not
+a number is refused when it is written rather than when someone asks for the newest — by then the
+wrong graph has already been chosen and nobody is watching.
+
+**Ordering and identity are different questions.** `1.0` and `1.0.0` compare equal but are two
+registrations. The registry keys on the exact string; only the choice of "newest" consults the
+order. Conflating them would run a version other than the one recorded.
+
+**A version is immutable.** Re-registering the same `(id, version)` with a different definition is
+refused; with the same definition it is a no-op, because restarting a process and reading the same
+directory must not be an error. Without this, "it ran on 1.2" says nothing and the reproducibility
+above is a sentence rather than a property.
+
+**Migrating a running execution to a new version is a separate problem** — it means deciding what
+`currentStep` means in a graph that may not contain it, which is a mapping language, not a lookup.
+The record already knows where it stopped and on what, so that work stays possible; it is simply
+not this rule.
+
 ---
 
 # 25. Workflow Compilation

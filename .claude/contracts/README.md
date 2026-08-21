@@ -19,7 +19,7 @@ onunla çelişmez.
 | 6 | [parallel-and-transform.md](parallel-and-transform.md) | §9.5 Parallel, §9.6 Transform, §29 Concurrency/join | **Tamam** (2026-08-21) |
 | 7 | [event-driven-wait.md](event-driven-wait.md) | §9.7 Wait, §28 event-driven yürütme | **Tamam** (2026-08-21) |
 | 8 | [capability-permissions.md](capability-permissions.md) | §23 Security model — izin zorlaması | **Tamam** (2026-08-21) |
-| 9 | _workflow-versioning_ | §24 Versiyonlama, çalışan execution'ların migrasyonu | Planlanan |
+| 9 | [workflow-versioning.md](workflow-versioning.md) | §24, §24.1 — sürüm kimliğin parçası; migrasyon kapsam dışı | **Tamam** (2026-08-21) |
 | 10a | [orphan-recovery.md](orphan-recovery.md) | §15, §38 — `RUNNING`'de takılı execution'ları toplama | **Tamam** (2026-08-20) |
 | 10 | _distributed-workers_ | §28 Queue + worker dağıtımı, §38 reliability | Planlanan |
 | 11 | _cost-and-evaluation_ | §39 cost tracking, evaluation, model routing | Planlanan |

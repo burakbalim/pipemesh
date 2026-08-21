@@ -153,6 +153,7 @@ class PipeMesh:
         *,
         organization: Optional[str] = None,
         traceparent: str = "",
+        version: Optional[str] = None,
     ) -> ExecutionHandle:
         """Run a named workflow.
 
@@ -160,12 +161,17 @@ class PipeMesh:
         a person. Waiting costs nothing on the server, so a workflow that needs
         an approval returns promptly with ``status.is_waiting`` rather than
         holding the call open (DESIGN.md §26.4).
+
+        ``version`` pins the run to one workflow version. Left out, the newest
+        registered version is chosen once and written to the execution's record,
+        so a deploy landing mid-run does not move it (§24).
         """
         request = pb.StartExecutionRequest(
             workflow_id=workflow_id,
             input=_to_struct(payload),
             organization_id=organization or self._organization,
             traceparent=traceparent,
+            workflow_version=version or "",
         )
         return _handle(self._call(self._stub.StartExecution, request))
 

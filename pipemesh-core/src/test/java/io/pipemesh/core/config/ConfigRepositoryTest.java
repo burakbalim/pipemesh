@@ -98,8 +98,8 @@ class ConfigRepositoryTest {
 
         config.workflows().forEach(registry::register);
 
-        assertTrue(registry.find(WorkflowId.of("venue_booking")).isPresent());
-        assertTrue(registry.find(WorkflowId.of("refund_request")).isPresent());
+        assertTrue(registry.latest(WorkflowId.of("venue_booking")).isPresent());
+        assertTrue(registry.latest(WorkflowId.of("refund_request")).isPresent());
     }
 
     @Test

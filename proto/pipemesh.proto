@@ -72,6 +72,11 @@ message StartExecutionRequest {
   // Reserved for fields the design already anticipates: an idempotency key, a
   // deadline, a principal, a priority.
   reserved 5 to 9;
+
+  // Pins the run to one workflow version. Left empty, the newest registered
+  // version is chosen once, at the start, and written to the execution's record
+  // — so a deploy that lands mid-run does not move it (§24).
+  string workflow_version = 10;
 }
 
 message ProcessMessageRequest {

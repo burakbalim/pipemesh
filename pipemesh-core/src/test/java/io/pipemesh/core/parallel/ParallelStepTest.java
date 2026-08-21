@@ -18,6 +18,10 @@ import io.pipemesh.core.state.ExecutionRecord;
 import io.pipemesh.core.state.memory.InMemoryApprovalStore;
 import io.pipemesh.core.state.memory.InMemoryStateStore;
 import io.pipemesh.core.workflow.InMemoryWorkflowRegistry;
+import java.util.Optional;
+import io.pipemesh.core.workflow.WorkflowVersion;
+import io.pipemesh.core.workflow.ExecutionGraph;
+import io.pipemesh.core.workflow.WorkflowRegistry;
 import io.pipemesh.core.workflow.Step;
 import io.pipemesh.core.workflow.StepId;
 import io.pipemesh.core.workflow.StepType;
@@ -86,12 +90,27 @@ class ParallelStepTest {
      * needs the registry, and the registry needs the compiler. It is tied with two
      * lazy references rather than an initialisation order nobody can follow.
      */
+    /** Hands the parallel step a registry that does not exist yet at wiring time. */
+    private static WorkflowRegistry lazily(AtomicReference<InMemoryWorkflowRegistry> registry) {
+        return new WorkflowRegistry() {
+            @Override
+            public Optional<ExecutionGraph> find(WorkflowId id, WorkflowVersion version) {
+                return registry.get().find(id, version);
+            }
+
+            @Override
+            public Optional<ExecutionGraph> latest(WorkflowId id) {
+                return registry.get().latest(id);
+            }
+        };
+    }
+
     private ExecutionRecord run(String workflow) {
         AtomicReference<InMemoryWorkflowRegistry> registry = new AtomicReference<>();
 
         StepExecutors all = StepExecutors.of(
                 new SlowStep(),
-                new ParallelStepExecutor(id -> registry.get().find(id), executors::get),
+                new ParallelStepExecutor(lazily(registry), executors::get),
                 new ApprovalStepExecutor(new InMemoryApprovalStore()),
                 new TerminalStepExecutor());
 
@@ -269,7 +288,7 @@ class ParallelStepTest {
         AtomicReference<InMemoryWorkflowRegistry> registry = new AtomicReference<>();
 
         ParallelStepExecutor parallel =
-                new ParallelStepExecutor(id -> registry.get().find(id), executors::get);
+                new ParallelStepExecutor(lazily(registry), executors::get);
 
         StepExecutors all = StepExecutors.of(
                 new SlowStep(), parallel,

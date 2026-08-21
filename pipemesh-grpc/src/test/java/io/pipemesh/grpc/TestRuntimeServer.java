@@ -71,6 +71,24 @@ public final class TestRuntimeServer {
             }
             """;
 
+    /**
+     * The same workflow at two versions, ending differently on purpose: the
+     * final status is how a client in another language can tell which graph ran.
+     */
+    private static final String POLICY_V1 = """
+            {
+              "id": "policy_check", "version": "1.0", "entry": "done",
+              "steps": [{"id": "done", "type": "terminal", "status": "COMPLETED"}]
+            }
+            """;
+
+    private static final String POLICY_V2 = """
+            {
+              "id": "policy_check", "version": "2.0", "entry": "done",
+              "steps": [{"id": "done", "type": "terminal", "status": "CANCELLED"}]
+            }
+            """;
+
     public static void main(String[] args) throws Exception {
         ExecutionUpdateBroker broker = new ExecutionUpdateBroker();
         InMemoryStateStore stateStore = new InMemoryStateStore();
@@ -95,6 +113,8 @@ public final class TestRuntimeServer {
                 new InMemoryWorkflowRegistry(new WorkflowCompiler(executors));
         workflows.register(new WorkflowDefinitionReader().read(BOOKING));
         workflows.register(new WorkflowDefinitionReader().read(DISCOUNT));
+        workflows.register(new WorkflowDefinitionReader().read(POLICY_V1));
+        workflows.register(new WorkflowDefinitionReader().read(POLICY_V2));
 
         IntentRegistry knownIntents = IntentRegistry.of(List.of(
                 new IntentDefinition(IntentId.of("book_venue"), WorkflowId.of("venue_booking"),

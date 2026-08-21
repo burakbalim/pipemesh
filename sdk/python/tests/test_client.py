@@ -129,3 +129,26 @@ def test_process_says_when_it_could_not_tell_what_was_meant(mesh: PipeMesh):
         mesh.process("what is the weather like in Antalya")
 
     assert failure.value.failed_precondition
+
+
+def test_starts_on_the_newest_version_when_none_is_named(mesh):
+    """Two versions are registered; policy_check@2.0 cancels, 1.0 completes."""
+    handle = mesh.execute("policy_check")
+
+    assert handle.status is ExecutionStatus.CANCELLED
+    assert mesh.get(handle.execution_id).workflow_version == "2.0"
+
+
+def test_pins_the_run_to_a_named_version(mesh):
+    handle = mesh.execute("policy_check", version="1.0")
+
+    assert handle.status is ExecutionStatus.COMPLETED
+    assert mesh.get(handle.execution_id).workflow_version == "1.0"
+
+
+def test_an_unregistered_version_is_refused_by_version(mesh):
+    with pytest.raises(PipeMeshError) as refused:
+        mesh.execute("policy_check", version="9.9")
+
+    assert refused.value.not_found
+    assert "9.9" in str(refused.value)

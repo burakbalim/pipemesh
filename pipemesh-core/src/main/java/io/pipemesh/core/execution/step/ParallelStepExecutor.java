@@ -94,7 +94,7 @@ public final class ParallelStepExecutor implements StepExecutor {
                     "a parallel step with no branches is a step that does nothing", false);
         }
 
-        Optional<ExecutionGraph> graph = workflows.find(context.workflowId());
+        Optional<ExecutionGraph> graph = workflows.find(context.workflowId(), context.workflowVersion());
         if (graph.isEmpty()) {
             return new StepResult.Failed("parallel.unknown_workflow",
                     "workflow '" + context.workflowId() + "' is no longer registered", false);
@@ -174,7 +174,7 @@ public final class ParallelStepExecutor implements StepExecutor {
     @Override
     public boolean repeatable(Step step, ExecutionContext context) {
         Optional<StepId> join = joinOf(step);
-        Optional<ExecutionGraph> graph = workflows.find(context.workflowId());
+        Optional<ExecutionGraph> graph = workflows.find(context.workflowId(), context.workflowVersion());
         if (join.isEmpty() || graph.isEmpty()) {
             return false;
         }

@@ -194,4 +194,25 @@ describe("PipeMesh client", () => {
       (failure: PipeMeshError) => failure.failedPrecondition,
     );
   });
+  it("starts on the newest version when none is named", async () => {
+    // policy_check@2.0 cancels where 1.0 completes, so the status names the graph.
+    const handle = await mesh.execute("policy_check");
+
+    assert.equal(handle.status, "CANCELLED");
+    assert.equal((await mesh.get(handle.executionId)).workflowVersion, "2.0");
+  });
+
+  it("pins the run to a named version", async () => {
+    const handle = await mesh.execute("policy_check", {}, { version: "1.0" });
+
+    assert.equal(handle.status, "COMPLETED");
+    assert.equal((await mesh.get(handle.executionId)).workflowVersion, "1.0");
+  });
+
+  it("refuses an unregistered version by version, not by id", async () => {
+    await assert.rejects(
+      () => mesh.execute("policy_check", {}, { version: "9.9" }),
+      (failure: PipeMeshError) => failure.notFound && failure.message.includes("9.9"),
+    );
+  });
 });

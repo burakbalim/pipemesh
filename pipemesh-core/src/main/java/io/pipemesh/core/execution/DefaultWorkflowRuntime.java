@@ -58,11 +58,24 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
         // would reach their workers too (§14, §22.2).
         refuseIfNotTheirs(request.principal(), request.organization());
 
-        ExecutionGraph graph = workflows.find(request.workflowId()).orElseThrow(
-                () -> new NoSuchElementException(
-                        "no workflow registered as '" + request.workflowId() + "'"));
+        ExecutionGraph graph = graphFor(request);
 
         return handleOf(executor.start(graph, ExecutionId.generate(), request));
+    }
+
+    /**
+     * A pinned request gets exactly that version; an unpinned one gets whatever is
+     * newest, chosen here once and then frozen into the record by the executor.
+     */
+    private ExecutionGraph graphFor(ExecutionRequest request) {
+        return request.versionIfPinned()
+                .map(version -> workflows.find(request.workflowId(), version)
+                        .orElseThrow(() -> new NoSuchElementException(
+                                "workflow '" + request.workflowId() + "' has no version '"
+                                        + version + "' registered")))
+                .orElseGet(() -> workflows.latest(request.workflowId())
+                        .orElseThrow(() -> new NoSuchElementException(
+                                "no workflow registered as '" + request.workflowId() + "'")));
     }
 
     @Override
@@ -123,10 +136,13 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
         if (!record.status().isResumable()) {
             return handleOf(record);
         }
-        ExecutionGraph graph = workflows.find(record.workflowId()).orElseThrow(
-                () -> new NoSuchElementException(
+        // The version comes from the record, never from whoever is resuming: an
+        // execution finishes inside the graph it started in, and a deploy in the
+        // meantime does not get a vote (§24).
+        ExecutionGraph graph = workflows.find(record.workflowId(), record.workflowVersion())
+                .orElseThrow(() -> new NoSuchElementException(
                         "execution " + executionId + " refers to unregistered workflow '"
-                                + record.workflowId() + "'"));
+                                + record.workflowId() + "@" + record.workflowVersion() + "'"));
 
         return handleOf(executor.resume(graph, record, signal));
     }

@@ -15,6 +15,7 @@ import io.pipemesh.core.execution.OrganizationId;
 import io.pipemesh.core.execution.ResumeSignal;
 import io.pipemesh.core.execution.WorkflowRuntime;
 import io.pipemesh.core.workflow.WorkflowId;
+import io.pipemesh.core.workflow.WorkflowVersion;
 import io.pipemesh.proto.v1.ExecutionHandle;
 import io.pipemesh.proto.v1.ExecutionSnapshot;
 import io.pipemesh.proto.v1.ExecutionStarted;
@@ -70,7 +71,13 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
                 organizationOf(request.getOrganizationId()),
                 request.getTraceparent(),
                 null,
-                caller()))));
+                caller(),
+                versionOf(request.getWorkflowVersion())))));
+    }
+
+    /** An empty version on the wire means "newest", not a version named "". */
+    private static WorkflowVersion versionOf(String version) {
+        return version == null || version.isBlank() ? null : WorkflowVersion.of(version);
     }
 
     /**

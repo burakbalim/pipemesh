@@ -113,7 +113,7 @@ public final class RecoverySweeper {
     }
 
     private boolean recover(ExecutionRecord orphan) {
-        Optional<ExecutionGraph> graph = workflows.find(orphan.workflowId());
+        Optional<ExecutionGraph> graph = workflows.find(orphan.workflowId(), orphan.workflowVersion());
         if (graph.isEmpty()) {
             // The workflow was unregistered while an execution of it was in flight.
             // Nothing can drive it, and leaving it in RUNNING forever helps no one.
