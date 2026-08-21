@@ -1937,6 +1937,45 @@ Streaming changes how an answer arrives, never what it is: the step still ends
 with a complete response, still validates it against its schema (§21), and still
 writes one variable. A workflow reads the same either way.
 
+## 30.1 What a watcher may see, and who may watch
+
+Streaming is not the answer to long-running work — durable execution is (§15). Its job is
+answering "what is happening right now", and that question was badly served while a forty-second
+step produced nothing until it ended.
+
+**A step announces itself before it runs.** `step.started` carries the attempt number, so three
+retries read as three attempts rather than one slow step.
+
+**Nothing below a step is announced.** `llm.started`, `capability.started` and their kind are
+deliberately absent, and the rule behind that is worth stating plainly:
+
+> An event may only claim something durable state can corroborate.
+
+A step start is corroborated: the stored record already says the execution stands at that step,
+so a watcher's view survives the process that produced it. Work *inside* a step has no such
+witness — publish `capability.started`, lose the process, replay the step, and the client is the
+only one who ever believed it happened. Tokens are the deliberate exception, because a token is
+not a claim about state; it is the output itself.
+
+**Recovery is announced at both endings.** An execution picked up after a crash either continues
+or stops for a person because its step could not be repeated (§15). Both are recoveries and both
+are published, told apart by `repeated` — the second is the one worth hearing about, and it used
+to be the silent one.
+
+**A watcher may decline the noisy parts.** Tokens and progress can each be turned off per
+subscription. Status updates cannot: a stream that could omit `finished` would leave a caller
+waiting for something already over. Sequence numbers are assigned before filtering, so a filtered
+watcher sees gaps — and a gap says "not for you", which is what keeps filtering distinguishable
+from loss.
+
+**Whether an organization may watch at all is a deployment's decision**, expressed as a
+permission the caller either holds or does not (§23). No new mechanism: the same permission set
+`CapabilityInvoker` already reads, with a second reader. It is off by default, because demanding
+a permission of callers nobody authenticated would deny every deployment that never set up a
+resolver — the same reasoning as §22.2, where a deployment that identifies nobody has no
+isolation to enforce either. And when it is on, a refusal is an error rather than an empty
+stream: a stream that opens and closes looks exactly like nothing happening.
+
 ---
 
 # 31. Configuration Repository

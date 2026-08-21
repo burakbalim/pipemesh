@@ -152,3 +152,38 @@ def test_an_unregistered_version_is_refused_by_version(mesh):
 
     assert refused.value.not_found
     assert "9.9" in str(refused.value)
+
+
+def test_a_long_step_announces_itself_before_it_finishes(mesh: PipeMesh):
+    waiting = _expensive(mesh)
+    updates = mesh.watch(waiting.execution_id)
+
+    mesh.approve(waiting.execution_id, f"{waiting.execution_id}:approval")
+
+    started = [update for update in updates if update.kind == "step_started"]
+
+    assert [update.step_id for update in started] == ["booked"]
+    assert started[0].attempt == 1, "a first try, and it says so"
+
+
+def test_a_watcher_can_decline_progress(mesh: PipeMesh):
+    waiting = _expensive(mesh)
+    updates = mesh.watch(waiting.execution_id, progress=False)
+
+    mesh.approve(waiting.execution_id, f"{waiting.execution_id}:approval")
+
+    kinds = [update.kind for update in updates]
+
+    assert "step_started" not in kinds
+    assert kinds[-1] == "finished", "status is not something a watcher can turn off"
+
+
+def test_declining_leaves_gaps_rather_than_renumbering(mesh: PipeMesh):
+    waiting = _expensive(mesh)
+    updates = mesh.watch(waiting.execution_id, progress=False)
+
+    mesh.approve(waiting.execution_id, f"{waiting.execution_id}:approval")
+
+    sequences = [update.sequence for update in updates]
+
+    assert sequences == [0, 1, 2, 4, 5], "a gap says 'not for you', not 'lost'"

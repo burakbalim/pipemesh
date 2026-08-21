@@ -24,6 +24,13 @@ public interface ExecutionObserver {
     default void executionStarted(ExecutionEvent event) {
     }
 
+    /**
+     * A step about to run — the event that keeps a long step from looking like
+     * nothing happening (§30).
+     */
+    default void stepStarted(StepStartEvent event) {
+    }
+
     default void stepFinished(StepEvent event) {
     }
 
@@ -39,7 +46,7 @@ public interface ExecutionObserver {
      * <p>Worth its own event rather than looking like a resume: a resume follows a
      * decision somebody made, this follows a failure nobody reported.
      */
-    default void executionRecovered(ExecutionEvent event) {
+    default void executionRecovered(RecoveryEvent event) {
     }
 
     default void executionFinished(ExecutionEvent event) {

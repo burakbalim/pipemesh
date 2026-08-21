@@ -18,6 +18,7 @@ import io.opentelemetry.context.Context;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.pipemesh.core.execution.StepAttributes;
 import io.pipemesh.core.observability.ExecutionEvent;
+import io.pipemesh.core.observability.RecoveryEvent;
 import io.pipemesh.core.observability.ExecutionObserver;
 import io.pipemesh.core.observability.StepEvent;
 import io.pipemesh.core.observability.TraceContext;
@@ -119,9 +120,11 @@ public final class OpenTelemetryExecutionObserver implements ExecutionObserver {
     }
 
     @Override
-    public void executionRecovered(ExecutionEvent event) {
+    public void executionRecovered(RecoveryEvent event) {
         // Worth counting on its own: a rising number here means processes are
         // dying mid-step, which is a different problem from workflows failing.
+        // Labelled by whether the step could be repeated, because a recovery that
+        // gives up is a different problem again.
         recoveries.add(1, attributesOf(event.attributes()));
     }
 

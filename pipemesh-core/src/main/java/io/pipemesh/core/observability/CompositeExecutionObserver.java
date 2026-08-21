@@ -48,6 +48,11 @@ public final class CompositeExecutionObserver implements ExecutionObserver {
     }
 
     @Override
+    public void stepStarted(StepStartEvent event) {
+        each(observer -> observer.stepStarted(event));
+    }
+
+    @Override
     public void stepFinished(StepEvent event) {
         each(observer -> observer.stepFinished(event));
     }
@@ -68,7 +73,7 @@ public final class CompositeExecutionObserver implements ExecutionObserver {
     }
 
     @Override
-    public void executionRecovered(ExecutionEvent event) {
+    public void executionRecovered(RecoveryEvent event) {
         each(observer -> observer.executionRecovered(event));
     }
 

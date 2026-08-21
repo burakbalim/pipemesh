@@ -107,6 +107,24 @@ message WatchExecutionRequest {
   // Replay from a point already seen, so a dropped connection does not lose
   // what happened while it was down.
   uint64 from_sequence = 2;
+
+  // What this watcher wants. Empty means everything — an unset field is zero in
+  // proto3, and the other reading would silently mute every existing client.
+  repeated UpdateKind exclude = 3;
+}
+
+// Groups of updates a watcher can decline. Deliberately coarse: a filter with
+// one entry per message type would be a second copy of the oneof to keep in
+// step with it.
+enum UpdateKind {
+  UPDATE_KIND_UNSPECIFIED = 0;
+
+  // Model output as it is produced. The largest part of a stream by far.
+  UPDATE_KIND_TOKEN = 1;
+
+  // step.started — progress while a step runs, at the cost of roughly doubling
+  // the number of updates.
+  UPDATE_KIND_PROGRESS = 2;
 }
 
 message ExecutionHandle {
@@ -138,7 +156,30 @@ message ExecutionUpdate {
     ExecutionResumed resumed = 6;
     ExecutionFinished finished = 7;
     TokenChunk token = 8;
+    StepStarted step_started = 9;
+    ExecutionRecovered recovered = 10;
   }
+}
+
+// A step about to run (§30). Published before the step is persisted, which is
+// safe because the stored record already stands at this step — unlike anything
+// happening inside a step, which would have no witness after a crash.
+message StepStarted {
+  string step_id = 1;
+  string step_type = 2;
+
+  // Counts from 1. A retry is a real second start rather than one long step.
+  uint32 attempt = 3;
+}
+
+// An execution picked up after the process running it died (§15, §38).
+message ExecutionRecovered {
+  string step_id = 1;
+
+  // Whether the step could be run again. A recovery that stopped for a person is
+  // still a recovery, and is the one worth hearing about.
+  bool repeated = 2;
+  string reason = 3;
 }
 
 message ExecutionStarted {

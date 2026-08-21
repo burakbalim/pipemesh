@@ -13,7 +13,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
 
-import { ExecutionHandle, PipeMesh, PipeMeshError, isTerminal, isWaiting } from "../src/client";
+import { ExecutionHandle, PipeMesh, PipeMeshError, Update, isTerminal, isWaiting } from "../src/client";
 
 const REPO = path.resolve(__dirname, "..", "..", "..", "..");
 const CLASSPATH_FILE = path.join(REPO, "pipemesh-grpc", "target", "test-classpath.txt");
@@ -214,5 +214,45 @@ describe("PipeMesh client", () => {
       () => mesh.execute("policy_check", {}, { version: "9.9" }),
       (failure: PipeMeshError) => failure.notFound && failure.message.includes("9.9"),
     );
+  });
+  /**
+   * Read the arrival frame before approving, as the test above does. An unread
+   * server stream applies backpressure on the shared connection, so the approve
+   * call never returns and the test hangs rather than fails.
+   */
+  async function watchThenApprove(options?: { progress?: boolean }): Promise<Update[]> {
+    const waiting = await expensive();
+    const updates = mesh.watch(waiting.executionId, options ?? {})[Symbol.asyncIterator]();
+
+    const first = await updates.next();
+
+    await mesh.approve(waiting.executionId, `${waiting.executionId}:approval`);
+
+    const seen: Update[] = [first.value];
+    for (let next = await updates.next(); !next.done; next = await updates.next()) {
+      seen.push(next.value);
+    }
+    return seen;
+  }
+
+  it("announces a long step before it finishes", async () => {
+    const started = (await watchThenApprove()).filter((update) => update.kind === "stepStarted");
+
+    assert.deepEqual(started.map((update) => update.stepId), ["booked"]);
+    assert.equal(started[0].attempt, 1, "a first try, and it says so");
+  });
+
+  it("lets a watcher decline progress and still see what happened", async () => {
+    const kinds = (await watchThenApprove({ progress: false })).map((update) => update.kind);
+
+    assert.ok(!kinds.includes("stepStarted"));
+    assert.equal(kinds.at(-1), "finished", "status cannot be turned off");
+  });
+
+  it("leaves gaps rather than renumbering what it filtered", async () => {
+    const sequences = (await watchThenApprove({ progress: false }))
+      .map((update) => update.sequence);
+
+    assert.deepEqual(sequences, [0, 1, 2, 4, 5], "a gap says 'not for you', not 'lost'");
   });
 });

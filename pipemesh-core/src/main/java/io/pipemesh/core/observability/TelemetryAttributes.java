@@ -18,6 +18,7 @@ public final class TelemetryAttributes {
     public static final String STEP_TYPE = "pipemesh.step.type";
     public static final String STEP_OUTCOME = "pipemesh.step.outcome";
     public static final String STEP_ATTEMPT = "pipemesh.step.attempt";
+    public static final String RECOVERY_REPEATED = "pipemesh.recovery.repeated";
 
     private TelemetryAttributes() {
     }

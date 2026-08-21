@@ -185,6 +185,10 @@ passes the tests — say so rather than accepting it.
 - **Scoring quality is the application's job, not the runtime's.** Evaluation is a capability and a
   condition, not a step type. A runtime holding a quality threshold has started deciding what
   "good" means (§3, §39.2).
+- **An event may only claim what durable state can corroborate.** A step start is fine — the
+  record already says the execution stands there. Anything happening *inside* a step is not: after
+  a crash and a replay, the client would be the only one who ever believed it. Tokens are the
+  exception, because a token is output rather than a claim about state (§30.1).
 - **An observer must never fail an execution.** Whatever it throws is contained. Telemetry going
   dark is a bad day; telemetry taking a workflow down is an outage.
 

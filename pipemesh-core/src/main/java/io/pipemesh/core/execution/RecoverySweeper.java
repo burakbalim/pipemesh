@@ -3,6 +3,7 @@ package io.pipemesh.core.execution;
 import io.pipemesh.core.observability.CompositeExecutionObserver;
 import io.pipemesh.core.observability.ExecutionEvent;
 import io.pipemesh.core.observability.ExecutionObserver;
+import io.pipemesh.core.observability.RecoveryEvent;
 import io.pipemesh.core.observability.TraceContext;
 import io.pipemesh.core.state.ExecutionRecord;
 import io.pipemesh.core.state.StaleExecutionException;
@@ -133,7 +134,7 @@ public final class RecoverySweeper {
         }
 
         try {
-            observer.executionRecovered(eventOf(orphan));
+            observer.executionRecovered(RecoveryEvent.resumed(eventOf(orphan)));
             executor.drive(graph.get(), orphan);
             return true;
         } catch (StaleExecutionException someoneElseHasIt) {
@@ -143,7 +144,13 @@ public final class RecoverySweeper {
         }
     }
 
+    /**
+     * A recovery that could not carry on. It is still a recovery and is announced
+     * as one — an execution that quietly stopped being recovered is exactly the
+     * thing nobody notices.
+     */
     private boolean stop(ExecutionRecord orphan, String code, String message) {
+        observer.executionRecovered(RecoveryEvent.abandoned(eventOf(orphan), message));
         long now = clock.millis();
         ExecutionRecord failed = new ExecutionRecord(
                 orphan.executionId(),

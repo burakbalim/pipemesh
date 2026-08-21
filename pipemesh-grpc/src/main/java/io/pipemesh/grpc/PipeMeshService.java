@@ -27,7 +27,9 @@ import io.pipemesh.proto.v1.StartExecutionRequest;
 import io.pipemesh.proto.v1.SubmitApprovalRequest;
 import io.pipemesh.proto.v1.WatchExecutionRequest;
 
+import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -44,6 +46,7 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
     private final WorkflowRuntime runtime;
     private final ExecutionUpdateBroker broker;
     private final PrincipalResolver principals;
+    private final List<String> watchPermissions;
 
     public PipeMeshService(WorkflowRuntime runtime, ExecutionUpdateBroker broker) {
         this(runtime, broker, PrincipalResolver.ANONYMOUS);
@@ -58,6 +61,23 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
     public PipeMeshService(
             WorkflowRuntime runtime, ExecutionUpdateBroker broker, PrincipalResolver principals) {
 
+        this(runtime, broker, principals, List.of());
+    }
+
+    /**
+     * @param watchPermissions what a caller must hold to watch an execution live.
+     *                         Empty — the default — means watching is open, which
+     *                         is what a deployment that identifies nobody can
+     *                         enforce anyway (§22.2). A deployment that sells live
+     *                         watching as a feature names a permission here, and
+     *                         decides elsewhere who gets it.
+     */
+    public PipeMeshService(
+            WorkflowRuntime runtime, ExecutionUpdateBroker broker,
+            PrincipalResolver principals, List<String> watchPermissions) {
+
+        this.watchPermissions = List.copyOf(
+                Objects.requireNonNull(watchPermissions, "watch permissions"));
         this.runtime = Objects.requireNonNull(runtime, "runtime");
         this.broker = Objects.requireNonNull(broker, "broker");
         this.principals = Objects.requireNonNull(principals, "principal resolver");
@@ -156,6 +176,18 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
      */
     @Override
     public void watchExecution(WatchExecutionRequest request, StreamObserver<ExecutionUpdate> response) {
+        Principal caller = caller();
+        if (!mayWatch(caller)) {
+            // Refused rather than answered with an empty stream. A stream that
+            // opens and closes looks exactly like "nothing is happening", which
+            // is indistinguishable from a broken workflow — a feature that is off
+            // has to say so.
+            response.onError(Status.PERMISSION_DENIED
+                    .withDescription("watching an execution requires " + watchPermissions)
+                    .asRuntimeException());
+            return;
+        }
+
         ExecutionId executionId = ExecutionId.of(request.getExecutionId());
         ServerCallStreamObserver<ExecutionUpdate> call = (ServerCallStreamObserver<ExecutionUpdate>) response;
         AtomicReference<AutoCloseable> subscription = new AtomicReference<>();
@@ -180,8 +212,26 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
             unsubscribe.get().close();
         });
 
-        unsubscribe.set(broker.watch(executionId, pump::offer));
+        unsubscribe.set(broker.watch(executionId, Set.copyOf(request.getExcludeList()), pump::offer));
         call.setOnCancelHandler(() -> close(subscription.get()));
+    }
+
+    /**
+     * Whether live watching is switched on for this caller.
+     *
+     * <p>Not a new mechanism: the permission set a {@code Principal} already
+     * carries (§23), now with a second reader. Which permissions an API key's
+     * principal holds is a deployment's business — a subscription plan, a
+     * directory, a static config — and none of it reaches the engine.
+     *
+     * <p>{@code missingFrom} is what makes an unrestricted principal exempt
+     * without a special case, and an empty requirement open to everyone. Off by
+     * default matters: a permission demanded of callers nobody authenticated
+     * would deny every existing deployment in the name of a rule none of them
+     * asked for.
+     */
+    private boolean mayWatch(Principal caller) {
+        return caller.missingFrom(watchPermissions).isEmpty();
     }
 
     private void close(AutoCloseable subscription) {

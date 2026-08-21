@@ -128,6 +128,10 @@ class PipeMeshServiceTest {
                 .build());
     }
 
+    private static String numbered(io.pipemesh.proto.v1.ExecutionUpdate update) {
+        return update.getSequence() + ":" + update.getUpdateCase().name();
+    }
+
     private io.pipemesh.proto.v1.ExecutionHandle startExpensive() {
         return client.startExecution(StartExecutionRequest.newBuilder()
                 .setWorkflowId("venue_booking")
@@ -252,7 +256,8 @@ class PipeMeshServiceTest {
         }
 
         assertEquals(
-                List.of("STARTED", "RESUMED", "STEP_FINISHED", "STEP_FINISHED", "FINISHED"), kinds,
+                List.of("STARTED", "RESUMED", "STEP_FINISHED",
+                        "STEP_STARTED", "STEP_FINISHED", "FINISHED"), kinds,
                 "the stream opens with where things stand and ends when the execution does");
     }
 
@@ -294,16 +299,67 @@ class PipeMeshServiceTest {
                 client.watchExecution(WatchExecutionRequest.newBuilder()
                         .setExecutionId(waiting.getExecutionId()).build());
 
-        List<Long> sequences = new ArrayList<>();
-        sequences.add(updates.next().getSequence());
+        List<String> numbered = new ArrayList<>();
+        numbered.add(numbered(updates.next()));
 
         approve(waiting.getExecutionId());
 
         while (updates.hasNext()) {
-            sequences.add(updates.next().getSequence());
+            numbered.add(numbered(updates.next()));
         }
 
-        assertEquals(0L, sequences.get(0), "the snapshot on arrival");
-        assertEquals(List.of(0L, 1L, 2L, 3L, 4L), sequences);
+        assertEquals(
+                List.of("0:STARTED", "1:RESUMED", "2:STEP_FINISHED",
+                        "3:STEP_STARTED", "4:STEP_FINISHED", "5:FINISHED"),
+                numbered,
+                "one counter, no gaps, and the snapshot is 0");
+    }
+
+    /**
+     * The step being resumed gets no {@code step.started}: it started days ago,
+     * and {@code resumed} is the event that says what just happened to it. Only
+     * the steps that follow are starting now.
+     */
+    @Test
+    void aResumedStepIsNotAnnouncedAsStarting() {
+        var waiting = startExpensive();
+        Iterator<io.pipemesh.proto.v1.ExecutionUpdate> updates =
+                client.watchExecution(WatchExecutionRequest.newBuilder()
+                        .setExecutionId(waiting.getExecutionId()).build());
+        updates.next();
+
+        approve(waiting.getExecutionId());
+
+        List<String> started = new ArrayList<>();
+        while (updates.hasNext()) {
+            io.pipemesh.proto.v1.ExecutionUpdate update = updates.next();
+            if (update.getUpdateCase()
+                    == io.pipemesh.proto.v1.ExecutionUpdate.UpdateCase.STEP_STARTED) {
+                started.add(update.getStepStarted().getStepId());
+            }
+        }
+
+        assertEquals(List.of("booked"), started, "the approval step was already under way");
+    }
+
+    @Test
+    void aWatcherCanDeclineProgressAndStillSeeWhatHappened() {
+        var waiting = startExpensive();
+        Iterator<io.pipemesh.proto.v1.ExecutionUpdate> updates =
+                client.watchExecution(WatchExecutionRequest.newBuilder()
+                        .setExecutionId(waiting.getExecutionId())
+                        .addExclude(io.pipemesh.proto.v1.UpdateKind.UPDATE_KIND_PROGRESS)
+                        .build());
+        updates.next();
+
+        approve(waiting.getExecutionId());
+
+        List<String> kinds = new ArrayList<>();
+        while (updates.hasNext()) {
+            kinds.add(updates.next().getUpdateCase().name());
+        }
+
+        assertEquals(List.of("RESUMED", "STEP_FINISHED", "STEP_FINISHED", "FINISHED"), kinds,
+                "progress declined, everything else still delivered");
     }
 }

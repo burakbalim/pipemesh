@@ -13,6 +13,7 @@ import io.pipemesh.core.execution.step.ConditionStepExecutor;
 import io.pipemesh.core.execution.step.TerminalStepExecutor;
 import io.pipemesh.core.observability.ExecutionEvent;
 import io.pipemesh.core.observability.ExecutionObserver;
+import io.pipemesh.core.observability.RecoveryEvent;
 import io.pipemesh.core.state.ExecutionRecord;
 import io.pipemesh.core.state.StepRecord;
 import io.pipemesh.core.state.memory.InMemoryStateStore;
@@ -62,10 +63,12 @@ class RecoverySweeperTest {
     private static final class RecoveryRecorder implements ExecutionObserver {
 
         final List<String> recovered = new ArrayList<>();
+        final List<Boolean> repeated = new ArrayList<>();
 
         @Override
-        public void executionRecovered(ExecutionEvent event) {
-            recovered.add(event.executionId().value());
+        public void executionRecovered(RecoveryEvent event) {
+            recovered.add(event.execution().executionId().value());
+            repeated.add(event.repeated());
         }
     }
 
@@ -166,6 +169,22 @@ class RecoverySweeperTest {
         sweeper(executors(true), recorder).sweep();
 
         assertEquals(List.of(orphan.executionId().value()), recorder.recovered);
+        assertEquals(List.of(true), recorder.repeated, "it carried on");
+    }
+
+    /**
+     * A recovery that gives up is still a recovery. Saying nothing here would
+     * make the one case somebody needs to know about the quietest one.
+     */
+    @Test
+    void reportsARecoveryThatCouldNotCarryOn() {
+        ExecutionRecord orphan = orphanFrom(now.minus(Duration.ofMinutes(30)));
+        RecoveryRecorder recorder = new RecoveryRecorder();
+
+        sweeper(executors(false), recorder).sweep();
+
+        assertEquals(List.of(orphan.executionId().value()), recorder.recovered);
+        assertEquals(List.of(false), recorder.repeated, "the step could not be repeated");
     }
 
     @Test

@@ -6,6 +6,7 @@ import io.pipemesh.core.execution.RecoveryScheduler;
 import io.pipemesh.core.execution.WorkflowRuntime;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -69,6 +70,24 @@ public final class PipeMeshServer implements AutoCloseable {
             WorkerRegistry workers,
             PrincipalResolver principals) {
 
+        this(runtime, broker, port, recovery, workers, principals, List.of());
+    }
+
+    /**
+     * @param watchPermissions what a caller must hold to watch an execution live,
+     *                         or empty to leave watching open. This is where a
+     *                         deployment switches live streaming from "anyone who
+     *                         can reach us" to "whoever the plan says" (§30).
+     */
+    public PipeMeshServer(
+            WorkflowRuntime runtime,
+            ExecutionUpdateBroker broker,
+            int port,
+            RecoveryScheduler recovery,
+            WorkerRegistry workers,
+            PrincipalResolver principals,
+            List<String> watchPermissions) {
+
         Objects.requireNonNull(runtime, "runtime");
         Objects.requireNonNull(principals, "principal resolver");
         Objects.requireNonNull(broker, "broker");
@@ -76,7 +95,7 @@ public final class PipeMeshServer implements AutoCloseable {
 
         ServerBuilder<?> builder = ServerBuilder.forPort(port)
                 .intercept(new CallMetadata())
-                .addService(new PipeMeshService(runtime, broker, principals));
+                .addService(new PipeMeshService(runtime, broker, principals, watchPermissions));
         if (workers != null) {
             builder.addService(new CapabilityWorkerService(workers));
         }

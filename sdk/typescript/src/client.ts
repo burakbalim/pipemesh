@@ -77,10 +77,31 @@ export interface Approval {
 /** Something that happened to an execution being watched. */
 export interface Update {
   sequence: number;
-  kind: "started" | "stepFinished" | "suspended" | "resumed" | "finished" | "token";
+  kind:
+    | "started"
+    | "stepStarted"
+    | "stepFinished"
+    | "suspended"
+    | "resumed"
+    | "recovered"
+    | "finished"
+    | "token";
   stepId?: string;
   text?: string;
   status?: ExecutionStatus;
+  /** Counts from 1 on `stepStarted`: a retry is a real second start. */
+  attempt?: number;
+  /** On `recovered`: whether the step could be run again, or stopped for a person. */
+  repeated?: boolean;
+  reason?: string;
+}
+
+/** What a watcher can decline. Status updates are not on the list, deliberately. */
+export interface WatchOptions {
+  /** Model output as it is produced. Defaults to on. */
+  tokens?: boolean;
+  /** `stepStarted`, which roughly doubles the number of updates. Defaults to on. */
+  progress?: boolean;
 }
 
 /**
@@ -224,18 +245,30 @@ export class PipeMesh {
    * The first item is always `started` and carries the status as of that moment
    * — the point a caller can act from, knowing nothing after it will be missed.
    * The stream ends itself when the execution reaches a terminal status.
+   *
+   * `tokens` and `progress` turn off the two noisy parts. Status cannot be turned
+   * off — a stream that could omit `finished` would leave a caller waiting for
+   * something already over. Declining leaves gaps in `sequence`, which is how
+   * filtering stays distinguishable from loss.
    */
-  watch(executionId: string): AsyncIterable<Update> {
-    return streamOf(this.serverStream(executionId));
+  watch(executionId: string, options: WatchOptions = {}): AsyncIterable<Update> {
+    const exclude: string[] = [];
+    if (options.tokens === false) exclude.push("UPDATE_KIND_TOKEN");
+    if (options.progress === false) exclude.push("UPDATE_KIND_PROGRESS");
+
+    return streamOf(this.serverStream(executionId, exclude));
   }
 
   close(): void {
     this.client.close();
   }
 
-  private serverStream(executionId: string): grpc.ClientReadableStream<unknown> {
+  private serverStream(
+    executionId: string,
+    exclude: string[],
+  ): grpc.ClientReadableStream<unknown> {
     const method = (this.client as unknown as Record<string, Function>).WatchExecution;
-    return method.call(this.client, { executionId }) as grpc.ClientReadableStream<unknown>;
+    return method.call(this.client, { executionId, exclude }) as grpc.ClientReadableStream<unknown>;
   }
 
   private unary<T>(method: string, request: unknown, map: (reply: any) => T): Promise<T> {
@@ -268,6 +301,21 @@ function toUpdate(message: any): Update {
         sequence: Number(message.sequence),
         kind,
         status: message.started.execution.status.replace("EXECUTION_STATUS_", ""),
+      };
+    case "stepStarted":
+      return {
+        sequence: Number(message.sequence),
+        kind,
+        stepId: message.stepStarted.stepId,
+        attempt: Number(message.stepStarted.attempt),
+      };
+    case "recovered":
+      return {
+        sequence: Number(message.sequence),
+        kind,
+        stepId: message.recovered.stepId,
+        repeated: message.recovered.repeated,
+        reason: message.recovered.reason || undefined,
       };
     case "stepFinished":
       return { sequence: Number(message.sequence), kind, stepId: message.stepFinished.stepId };

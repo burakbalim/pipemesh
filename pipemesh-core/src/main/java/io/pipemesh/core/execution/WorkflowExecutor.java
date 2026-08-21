@@ -7,6 +7,7 @@ import io.pipemesh.core.observability.CompositeExecutionObserver;
 import io.pipemesh.core.observability.ExecutionEvent;
 import io.pipemesh.core.observability.ExecutionObserver;
 import io.pipemesh.core.observability.StepEvent;
+import io.pipemesh.core.observability.StepStartEvent;
 import io.pipemesh.core.observability.TraceContext;
 import io.pipemesh.core.policy.FailurePolicy;
 import io.pipemesh.core.policy.StepPolicy;
@@ -213,6 +214,13 @@ public final class WorkflowExecutor {
 
         ExecutionRecord current = record;
         for (int attempt = 1; ; attempt++) {
+            // Announced before the step runs, so a watcher sees a long step as a
+            // long step rather than as nothing happening (§30). Safe to say this
+            // early because the stored record already stands at this step — the
+            // claim has a witness that outlives the process making it.
+            observer.stepStarted(new StepStartEvent(
+                    eventOf(current), step.id(), step.type(), attempt));
+
             long startedAt = clock.millis();
             ExecutionRecord attemptOf = current;
             StepResult result = within(policy.timeout(),

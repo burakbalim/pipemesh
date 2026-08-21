@@ -82,8 +82,12 @@ class Approval:
 class Update:
     """Something that happened to an execution being watched.
 
-    ``kind`` is one of ``started``, ``step_finished``, ``suspended``,
-    ``resumed``, ``finished`` or ``token``.
+    ``kind`` is one of ``started``, ``step_started``, ``step_finished``,
+    ``suspended``, ``resumed``, ``recovered``, ``finished`` or ``token``.
+
+    ``attempt`` counts from 1 on ``step_started``: a retry is a real second
+    start rather than one long step. ``repeated`` says whether a ``recovered``
+    execution could carry on, or stopped for a person.
     """
 
     sequence: int
@@ -91,6 +95,9 @@ class Update:
     step_id: Optional[str] = None
     text: Optional[str] = None
     status: Optional[ExecutionStatus] = None
+    attempt: Optional[int] = None
+    repeated: Optional[bool] = None
+    reason: Optional[str] = None
 
 
 class PipeMeshError(RuntimeError):
@@ -247,7 +254,13 @@ class PipeMesh:
             variables=json_format.MessageToDict(snapshot.variables),
         )
 
-    def watch(self, execution_id: str) -> Iterator[Update]:
+    def watch(
+        self,
+        execution_id: str,
+        *,
+        tokens: bool = True,
+        progress: bool = True,
+    ) -> Iterator[Update]:
         """Return what happens to an execution, until it ends.
 
         The subscription is opened by this call, not by the first item read from
@@ -260,8 +273,20 @@ class PipeMesh:
         nothing after it will be missed. The stream closes itself when the
         execution reaches a terminal status, so a ``for`` loop over it ends on
         its own.
+
+        ``tokens`` and ``progress`` turn off the two noisy parts: model output as
+        it is produced, and ``step_started``. Status updates cannot be turned off
+        — a stream that could omit ``finished`` would leave a caller waiting for
+        something already over. Declining leaves gaps in ``sequence``, which is
+        how filtering stays distinguishable from loss.
         """
-        request = pb.WatchExecutionRequest(execution_id=execution_id)
+        exclude = []
+        if not tokens:
+            exclude.append(pb.UPDATE_KIND_TOKEN)
+        if not progress:
+            exclude.append(pb.UPDATE_KIND_PROGRESS)
+
+        request = pb.WatchExecutionRequest(execution_id=execution_id, exclude=exclude)
         try:
             stream = self._stub.WatchExecution(request)
             first = next(stream)
@@ -314,6 +339,15 @@ def _handle(reply: Any) -> ExecutionHandle:
 
 def _update(update: Any) -> Update:
     kind = update.WhichOneof("update")
+    if kind == "step_started":
+        return Update(update.sequence, kind,
+                      step_id=update.step_started.step_id,
+                      attempt=update.step_started.attempt)
+    if kind == "recovered":
+        return Update(update.sequence, kind,
+                      step_id=update.recovered.step_id,
+                      repeated=update.recovered.repeated,
+                      reason=update.recovered.reason or None)
     if kind == "step_finished":
         return Update(update.sequence, kind, step_id=update.step_finished.step_id)
     if kind == "suspended":
