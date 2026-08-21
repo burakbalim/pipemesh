@@ -42,8 +42,12 @@ public interface StepExecutor {
      * <p>Asked during recovery, not during retry: a retry follows a failure that
      * was reported, while recovery follows a silence. A step that may already have
      * had an effect must say no, and only the code that reads its config can tell.
+     *
+     * <p>The context comes with the question because the answer can depend on the
+     * execution: a step that runs other steps has to ask them, and it cannot find
+     * them without knowing which workflow this is.
      */
-    default boolean repeatable(Step step) {
+    default boolean repeatable(Step step, ExecutionContext context) {
         return true;
     }
 

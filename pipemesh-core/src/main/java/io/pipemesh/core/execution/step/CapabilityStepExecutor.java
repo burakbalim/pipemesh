@@ -107,7 +107,7 @@ public final class CapabilityStepExecutor implements StepExecutor {
      * twice.
      */
     @Override
-    public boolean repeatable(Step step) {
+    public boolean repeatable(Step step, ExecutionContext context) {
         String id = step.config().path(CAPABILITY).asText("");
         if (id.isBlank()) {
             return true;

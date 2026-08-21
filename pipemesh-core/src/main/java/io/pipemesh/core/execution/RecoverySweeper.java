@@ -122,7 +122,7 @@ public final class RecoverySweeper {
         }
 
         Step step = graph.get().stepAt(orphan.currentStep());
-        if (!executors.forType(step.type()).repeatable(step)) {
+        if (!executors.forType(step.type()).repeatable(step, contextOf(orphan))) {
             return stop(orphan, "execution.unrecoverable",
                     "step '" + step.id() + "' may already have taken effect and cannot be repeated");
         }
@@ -171,6 +171,19 @@ public final class RecoverySweeper {
         } catch (StaleExecutionException someoneElseHasIt) {
             return false;
         }
+    }
+
+    /** The question "may this be repeated?" is about a step in an execution. */
+    private io.pipemesh.core.execution.ExecutionContext contextOf(ExecutionRecord record) {
+        return new io.pipemesh.core.execution.ExecutionContext(
+                record.executionId(),
+                record.organization(),
+                record.workflowId(),
+                record.workflowVersion(),
+                record.currentStep(),
+                record.variables(),
+                record.traceContext(),
+                record.principal());
     }
 
     private ExecutionEvent eventOf(ExecutionRecord record) {

@@ -1777,6 +1777,17 @@ Parallel branches should be explicit.
 
 The runtime should track branch completion and only continue when the join condition is satisfied.
 
+Branches run inside the parallel step rather than as positions of their own. An
+execution has one row, one version and one writer; two branches advancing it
+would spend their lives losing to each other's version check. What is expensive
+is the I/O, and that is what runs concurrently — persistence stays where the
+durability model needs it, at one step and one write.
+
+The cost is real and worth stating: steps inside a branch get no history rows and
+no durability of their own, so a process that dies mid-parallel makes recovery
+re-run the whole step. A parallel step therefore asks every branch whether it may
+be repeated before recovery is allowed to try (§15).
+
 ---
 
 # 30. Streaming

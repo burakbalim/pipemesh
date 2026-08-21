@@ -132,6 +132,10 @@ passes the tests — say so rather than accepting it.
   lean on — the boundaries are explicit and easy to break. Check this whenever provider code moves.
 - **A retry is a policy, never a graph edge.** A step that loops back to itself to try again has
   put an operational concern where nobody can change it without editing the workflow.
+- **A step that runs other steps owns their durability question.** Branch and loop work happens
+  inside one step and gets one history row, so anything unrepeatable in there makes the whole step
+  unrepeatable. `ParallelStepExecutor.repeatable` asks its branches; a step type that forgets to
+  ask is one that can take a payment twice.
 - **A crash is not a failure report.** An execution left in `RUNNING` is picked up by
   `RecoverySweeper`; a step that may already have taken effect is not repeated, and the execution
   stops for a person instead of guessing. Something must actually run the sweeper —
