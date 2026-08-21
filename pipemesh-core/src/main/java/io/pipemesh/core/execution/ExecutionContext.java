@@ -3,6 +3,7 @@ package io.pipemesh.core.execution;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.pipemesh.core.capability.Principal;
 import io.pipemesh.core.workflow.StepId;
 import io.pipemesh.core.workflow.WorkflowId;
 import io.pipemesh.core.workflow.WorkflowVersion;
@@ -24,13 +25,15 @@ public record ExecutionContext(
         WorkflowVersion workflowVersion,
         StepId currentStep,
         ObjectNode variables,
-        String traceParent) {
+        String traceParent,
+        Principal principal) {
 
     public ExecutionContext(
             ExecutionId executionId, OrganizationId organization, WorkflowId workflowId,
             WorkflowVersion workflowVersion, StepId currentStep, ObjectNode variables) {
 
-        this(executionId, organization, workflowId, workflowVersion, currentStep, variables, "");
+        this(executionId, organization, workflowId, workflowVersion, currentStep, variables,
+                "", Principal.SYSTEM);
     }
 
     public ExecutionContext {
@@ -41,6 +44,7 @@ public record ExecutionContext(
         Objects.requireNonNull(currentStep, "current step");
         variables = variables == null ? JsonNodeFactory.instance.objectNode() : variables.deepCopy();
         traceParent = traceParent == null ? "" : traceParent;
+        principal = principal == null ? Principal.SYSTEM : principal;
     }
 
     @Override
@@ -54,7 +58,8 @@ public record ExecutionContext(
 
     public ExecutionContext at(StepId step) {
         return new ExecutionContext(
-                executionId, organization, workflowId, workflowVersion, step, variables, traceParent);
+                executionId, organization, workflowId, workflowVersion, step, variables,
+                traceParent, principal);
     }
 
     /** Returns a context with {@code additions} merged over the current variables. */
@@ -62,6 +67,7 @@ public record ExecutionContext(
         ObjectNode merged = variables.deepCopy();
         additions.forEach(merged::set);
         return new ExecutionContext(
-                executionId, organization, workflowId, workflowVersion, currentStep, merged, traceParent);
+                executionId, organization, workflowId, workflowVersion, currentStep, merged,
+                traceParent, principal);
     }
 }

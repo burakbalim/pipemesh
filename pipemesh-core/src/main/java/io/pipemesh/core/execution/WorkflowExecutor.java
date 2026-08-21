@@ -463,7 +463,8 @@ public final class WorkflowExecutor {
                 record.workflowVersion(),
                 record.currentStep(),
                 record.variables(),
-                record.traceContext());
+                record.traceContext(),
+                record.principal());
     }
 
     private ObjectNode merged(ExecutionRecord record, Map<String, JsonNode> additions) {
@@ -498,7 +499,8 @@ public final class WorkflowExecutor {
                 trace.toTraceParent(),
                 0L,
                 0L,
-                0L);
+                0L,
+                request.principal());
     }
 
     private ExecutionRecord record(
@@ -515,7 +517,8 @@ public final class WorkflowExecutor {
                 from.traceContext(),
                 from.version(),
                 from.createdAtEpochMillis(),
-                from.updatedAtEpochMillis());
+                from.updatedAtEpochMillis(),
+                from.principal());
     }
 
     private ExecutionRecord exhausted(ExecutionRecord record) {

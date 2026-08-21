@@ -90,7 +90,12 @@ passes the tests — say so rather than accepting it.
 - **`task` is not a workflow step type.** It may exist as an internal runtime concept — an execution
   unit the engine schedules — but it must not appear in the workflow DSL (§9.8).
 - **Ownership, version, deployment mechanism and permissions belong to the capability registration**,
-  never to the workflow step. Permission enforcement happens in the registry, not the DSL (§23).
+  never to the workflow step. A capability declaring permissions is refused to a caller who does not
+  hold them, before the provider is reached (§23).
+- **A caller never states its own permissions.** The proto has no field for them. An execution
+  carries a `Principal` set by whoever authenticated the caller — `PrincipalResolver` on the server
+  for remote calls, `Principal.SYSTEM` for code already inside the process — and it is persisted, so
+  a check after a resume asks about the execution's own caller rather than whoever answered.
 - **Asking for a schema is not the same as enforcing one.** A model's answer is validated at the
   step boundary, so a malformed shape fails there rather than three steps later as something
   strange.

@@ -18,7 +18,7 @@ onunla çelişmez.
 | 5 | [intent-resolution.md](intent-resolution.md) | §19 Intent resolution, §20 deterministic vs AI karar sınırı | **Tamam** (2026-08-21) |
 | 6 | _parallel-and-transform_ | §9.5 Parallel, §9.6 Transform, §29 Concurrency/join | Planlanan |
 | 7 | _event-driven-wait_ | §9.7 Wait, §28 event-driven yürütme | Planlanan |
-| 8 | _capability-permissions_ | §23 Security model, MCP tool/resource izinleri | Planlanan |
+| 8 | [capability-permissions.md](capability-permissions.md) | §23 Security model — izin zorlaması | **Tamam** (2026-08-21) |
 | 9 | _workflow-versioning_ | §24 Versiyonlama, çalışan execution'ların migrasyonu | Planlanan |
 | 10a | [orphan-recovery.md](orphan-recovery.md) | §15, §38 — `RUNNING`'de takılı execution'ları toplama | **Tamam** (2026-08-20) |
 | 10 | _distributed-workers_ | §28 Queue + worker dağıtımı, §38 reliability | Planlanan |

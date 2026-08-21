@@ -151,7 +151,8 @@ public final class RecoverySweeper {
                 orphan.traceContext(),
                 orphan.version(),
                 orphan.createdAtEpochMillis(),
-                orphan.updatedAtEpochMillis());
+                orphan.updatedAtEpochMillis(),
+                orphan.principal());
 
         StepRecord entry = new StepRecord(
                 orphan.executionId(),

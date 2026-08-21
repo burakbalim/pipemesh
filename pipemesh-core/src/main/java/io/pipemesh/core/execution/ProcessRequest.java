@@ -1,5 +1,7 @@
 package io.pipemesh.core.execution;
 
+import io.pipemesh.core.capability.Principal;
+
 import java.util.Objects;
 import java.util.Optional;
 
@@ -15,7 +17,14 @@ public record ProcessRequest(
         String message,
         ExecutionInput input,
         OrganizationId organization,
-        String traceParent) {
+        String traceParent,
+        Principal principal) {
+
+    public ProcessRequest(
+            String message, ExecutionInput input, OrganizationId organization, String traceParent) {
+
+        this(message, input, organization, traceParent, Principal.SYSTEM);
+    }
 
     public ProcessRequest {
         Objects.requireNonNull(message, "message");
@@ -24,6 +33,7 @@ public record ProcessRequest(
         }
         input = input == null ? ExecutionInput.empty() : input;
         organization = organization == null ? OrganizationId.DEFAULT : organization;
+        principal = principal == null ? Principal.SYSTEM : principal;
     }
 
     public static ProcessRequest of(String message) {

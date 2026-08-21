@@ -90,6 +90,17 @@ public final class CapabilityStepExecutor implements StepExecutor {
         }
         CapabilityDescriptor descriptor = capability.get();
 
+        CapabilityCall call = callOf(step, context);
+
+        List<String> missing = call.principal().missingFrom(descriptor.permissions());
+        if (!missing.isEmpty()) {
+            // Refused, not failed: trying again with the same caller changes
+            // nothing, and a retry policy should not spend attempts on it (§23).
+            return new StepResult.Failed("capability.forbidden",
+                    "'" + context.principal() + "' may not use '" + id + "': missing " + missing,
+                    false);
+        }
+
         CapabilityProvider provider = providers.get(descriptor.executionType());
         if (provider == null) {
             return new StepResult.Failed("capability.no_provider",
@@ -97,7 +108,7 @@ public final class CapabilityStepExecutor implements StepExecutor {
                             + "' provider, which is not registered", false);
         }
 
-        CapabilityResult result = provider.invoke(descriptor, inputFor(config, context), callOf(step, context));
+        CapabilityResult result = provider.invoke(descriptor, inputFor(config, context), call);
         return switch (retryableOnly(descriptor, result)) {
             case CapabilityResult.Success success -> new StepResult.Continue(
                     StepId.of(required(config, NEXT)),
@@ -132,7 +143,8 @@ public final class CapabilityStepExecutor implements StepExecutor {
 
     private CapabilityCall callOf(Step step, ExecutionContext context) {
         return new CapabilityCall(
-                context.organization(), context.executionId(), step.id(), context.traceParent());
+                context.organization(), context.executionId(), step.id(),
+                context.traceParent(), context.principal());
     }
 
     /**

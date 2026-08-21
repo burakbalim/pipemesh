@@ -75,7 +75,8 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
                 request.input(),
                 request.organization(),
                 request.traceParent(),
-                describe(resolved)));
+                describe(resolved),
+                request.principal()));
     }
 
     /** What the execution should be able to say about why it ran. */

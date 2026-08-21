@@ -1,6 +1,7 @@
 package io.pipemesh.core.execution;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.pipemesh.core.capability.Principal;
 import io.pipemesh.core.workflow.WorkflowId;
 
 import java.util.Objects;
@@ -22,19 +23,28 @@ public record ExecutionRequest(
         ExecutionInput input,
         OrganizationId organization,
         String traceParent,
-        JsonNode intent) {
+        JsonNode intent,
+        Principal principal) {
 
     public ExecutionRequest(
             WorkflowId workflowId, ExecutionInput input,
             OrganizationId organization, String traceParent) {
 
-        this(workflowId, input, organization, traceParent, null);
+        this(workflowId, input, organization, traceParent, null, Principal.SYSTEM);
+    }
+
+    public ExecutionRequest(
+            WorkflowId workflowId, ExecutionInput input,
+            OrganizationId organization, String traceParent, JsonNode intent) {
+
+        this(workflowId, input, organization, traceParent, intent, Principal.SYSTEM);
     }
 
     public ExecutionRequest {
         Objects.requireNonNull(workflowId, "workflow id");
         input = input == null ? ExecutionInput.empty() : input;
         organization = organization == null ? OrganizationId.DEFAULT : organization;
+        principal = principal == null ? Principal.SYSTEM : principal;
     }
 
     public static ExecutionRequest of(WorkflowId workflowId, ExecutionInput input) {
@@ -47,7 +57,17 @@ public record ExecutionRequest(
     }
 
     public ExecutionRequest within(String traceParent) {
-        return new ExecutionRequest(workflowId, input, organization, traceParent, intent);
+        return new ExecutionRequest(workflowId, input, organization, traceParent, intent, principal);
+    }
+
+    /**
+     * Runs this on behalf of somebody in particular.
+     *
+     * <p>Set by whoever authenticated them. A request that arrived over a network
+     * never carries its own answer to this (§23).
+     */
+    public ExecutionRequest onBehalfOf(Principal principal) {
+        return new ExecutionRequest(workflowId, input, organization, traceParent, intent, principal);
     }
 
     /**
@@ -58,7 +78,7 @@ public record ExecutionRequest(
      * answer anywhere (§19).
      */
     public ExecutionRequest resolvedFrom(JsonNode intent) {
-        return new ExecutionRequest(workflowId, input, organization, traceParent, intent);
+        return new ExecutionRequest(workflowId, input, organization, traceParent, intent, principal);
     }
 
     public Optional<JsonNode> intentIfAny() {

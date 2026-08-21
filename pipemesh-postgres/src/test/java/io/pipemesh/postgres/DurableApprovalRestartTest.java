@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.pipemesh.core.execution.DefaultWorkflowRuntime;
 import io.pipemesh.core.execution.ExecutionHandle;
 import io.pipemesh.core.execution.ExecutionInput;
+import io.pipemesh.core.capability.Principal;
 import io.pipemesh.core.execution.ExecutionRequest;
 import io.pipemesh.core.execution.OrganizationId;
 import io.pipemesh.core.execution.ExecutionSnapshot;
@@ -34,6 +35,7 @@ import javax.sql.DataSource;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -254,6 +256,22 @@ class DurableApprovalRestartTest {
                 boot().runtime().snapshot(waiting.executionId()).orElseThrow();
 
         assertEquals(OrganizationId.of("acme"), snapshot.organization());
+    }
+
+    @Test
+    void keepsTheCallerItWasStartedByAcrossTheRestart() {
+        Process before = boot();
+        ExecutionHandle waiting = before.runtime().start(new ExecutionRequest(
+                WorkflowId.of("venue_booking"), input("{\"price\":250}"),
+                OrganizationId.of("acme"), null, null,
+                Principal.of("burak", "places.read")));
+
+        var after = boot().stateStore().find(waiting.executionId()).orElseThrow();
+
+        assertEquals("burak", after.principal().id());
+        assertTrue(after.principal().holds("places.read"),
+                "a capability check after a resume must ask about the execution's own caller");
+        assertFalse(after.principal().unrestricted());
     }
 
     @Test

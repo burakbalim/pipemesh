@@ -22,13 +22,21 @@ public record CapabilityCall(
         OrganizationId organization,
         ExecutionId executionId,
         StepId stepId,
-        String traceParent) {
+        String traceParent,
+        Principal principal) {
+
+    public CapabilityCall(
+            OrganizationId organization, ExecutionId executionId, StepId stepId, String traceParent) {
+
+        this(organization, executionId, stepId, traceParent, Principal.SYSTEM);
+    }
 
     public CapabilityCall {
         Objects.requireNonNull(organization, "organization");
         Objects.requireNonNull(executionId, "execution id");
         Objects.requireNonNull(stepId, "step id");
         traceParent = traceParent == null ? "" : traceParent;
+        principal = principal == null ? Principal.SYSTEM : principal;
     }
 
     public Optional<String> traceParentIfAny() {

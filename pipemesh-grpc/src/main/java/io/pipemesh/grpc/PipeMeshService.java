@@ -5,6 +5,7 @@ import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import io.pipemesh.core.execution.ExecutionId;
 import io.pipemesh.core.execution.ExecutionInput;
+import io.pipemesh.core.capability.Principal;
 import io.pipemesh.core.execution.ExecutionRequest;
 import io.pipemesh.core.execution.ProcessRequest;
 import io.pipemesh.core.intent.IntentUnresolvedException;
@@ -39,10 +40,24 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
 
     private final WorkflowRuntime runtime;
     private final ExecutionUpdateBroker broker;
+    private final PrincipalResolver principals;
 
     public PipeMeshService(WorkflowRuntime runtime, ExecutionUpdateBroker broker) {
+        this(runtime, broker, PrincipalResolver.ANONYMOUS);
+    }
+
+    /**
+     * @param principals how a caller's identity is established. Without one, every
+     *                   remote caller is anonymous and holds no permissions —
+     *                   capabilities that ask for none still work, the rest are
+     *                   refused (§23).
+     */
+    public PipeMeshService(
+            WorkflowRuntime runtime, ExecutionUpdateBroker broker, PrincipalResolver principals) {
+
         this.runtime = Objects.requireNonNull(runtime, "runtime");
         this.broker = Objects.requireNonNull(broker, "broker");
+        this.principals = Objects.requireNonNull(principals, "principal resolver");
     }
 
     @Override
@@ -51,7 +66,9 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
                 WorkflowId.of(request.getWorkflowId()),
                 new ExecutionInput(JsonStructs.toJson(request.getInput())),
                 organizationOf(request.getOrganizationId()),
-                request.getTraceparent()))));
+                request.getTraceparent(),
+                null,
+                caller()))));
     }
 
     /**
@@ -70,7 +87,8 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
                     request.getMessage(),
                     new ExecutionInput(JsonStructs.toJson(request.getInput())),
                     organizationOf(request.getOrganizationId()),
-                    request.getTraceparent()))));
+                    request.getTraceparent(),
+                    caller()))));
             response.onCompleted();
         } catch (IntentUnresolvedException unresolved) {
             response.onError(Status.FAILED_PRECONDITION
@@ -146,6 +164,16 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
         } catch (Exception ignored) {
             // Unsubscribing cannot fail in a way the caller can act on.
         }
+    }
+
+    /**
+     * Who is calling, according to the resolver — never according to the request.
+     *
+     * <p>Read from the call's own metadata, which the client cannot set to
+     * anything the resolver does not accept.
+     */
+    private Principal caller() {
+        return principals.resolve(CallMetadata.current());
     }
 
     private OrganizationId organizationOf(String id) {

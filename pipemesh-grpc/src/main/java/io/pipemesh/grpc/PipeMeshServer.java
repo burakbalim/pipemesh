@@ -52,12 +52,31 @@ public final class PipeMeshServer implements AutoCloseable {
             RecoveryScheduler recovery,
             WorkerRegistry workers) {
 
+        this(runtime, broker, port, recovery, workers, PrincipalResolver.ANONYMOUS);
+    }
+
+    /**
+     * @param principals how a remote caller's identity is established. The default
+     *                   makes every caller anonymous — safe, and visibly so: a
+     *                   capability that asks for a permission simply will not run
+     *                   until an application supplies a real resolver.
+     */
+    public PipeMeshServer(
+            WorkflowRuntime runtime,
+            ExecutionUpdateBroker broker,
+            int port,
+            RecoveryScheduler recovery,
+            WorkerRegistry workers,
+            PrincipalResolver principals) {
+
         Objects.requireNonNull(runtime, "runtime");
+        Objects.requireNonNull(principals, "principal resolver");
         Objects.requireNonNull(broker, "broker");
         this.recovery = recovery;
 
         ServerBuilder<?> builder = ServerBuilder.forPort(port)
-                .addService(new PipeMeshService(runtime, broker));
+                .intercept(new CallMetadata())
+                .addService(new PipeMeshService(runtime, broker, principals));
         if (workers != null) {
             builder.addService(new CapabilityWorkerService(workers));
         }

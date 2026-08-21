@@ -12,6 +12,10 @@ CREATE TABLE workflow_execution (
     current_step      TEXT,
     variables         JSONB       NOT NULL DEFAULT '{}'::jsonb,
     trace_context     TEXT        NOT NULL DEFAULT '',
+    -- Who this execution runs on behalf of. Persisted because whoever settles an
+    -- approval need not be whoever started it, and the capability check after a
+    -- resume must ask about the execution's own caller.
+    principal         JSONB       NOT NULL DEFAULT '{"id":"system","unrestricted":true}'::jsonb,
     -- Optimistic locking. Two workers reading the same execution must not both
     -- advance it: the loser's UPDATE matches no row and is rejected as stale.
     version           BIGINT      NOT NULL,

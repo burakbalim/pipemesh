@@ -104,6 +104,7 @@ public final class InMemoryStateStore implements StateStore {
                 record.traceContext(),
                 version,
                 createdAt,
-                updatedAt);
+                updatedAt,
+                record.principal());
     }
 }
