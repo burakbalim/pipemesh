@@ -6,7 +6,9 @@ import io.grpc.stub.StreamObserver;
 import io.pipemesh.core.execution.ExecutionId;
 import io.pipemesh.core.execution.ExecutionInput;
 import io.pipemesh.core.capability.Principal;
+import io.pipemesh.core.execution.DefaultWorkflowRuntime;
 import io.pipemesh.core.execution.ExecutionRequest;
+import io.pipemesh.core.execution.OrganizationMismatchException;
 import io.pipemesh.core.execution.ProcessRequest;
 import io.pipemesh.core.intent.IntentUnresolvedException;
 import io.pipemesh.core.execution.OrganizationId;
@@ -100,21 +102,38 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
 
     @Override
     public void submitApproval(SubmitApprovalRequest request, StreamObserver<ExecutionHandle> response) {
-        answer(response, () -> WireTypes.toWire(runtime.resume(
+        answer(response, () -> WireTypes.toWire(scoped().resume(
                 ExecutionId.of(request.getExecutionId()),
                 new ResumeSignal.Approval(
                         request.getApprovalId(),
                         request.getApproved(),
                         request.getDecidedBy(),
-                        request.getComment()))));
+                        request.getComment()),
+                caller())));
     }
 
     @Override
     public void getExecution(GetExecutionRequest request, StreamObserver<ExecutionSnapshot> response) {
-        answer(response, () -> runtime.snapshot(ExecutionId.of(request.getExecutionId()))
+        answer(response, () -> scoped().snapshot(ExecutionId.of(request.getExecutionId()), caller())
                 .map(WireTypes::toWire)
                 .orElseThrow(() -> new NoSuchElementException(
                         "no execution " + request.getExecutionId())));
+    }
+
+    /**
+     * The runtime, when it can answer on a caller's behalf.
+     *
+     * <p>Isolation needs a caller, and only the default implementation takes one.
+     * A custom {@link WorkflowRuntime} that does not is served unscoped — its
+     * author owns that decision, and pretending to enforce something this cannot
+     * see would be worse.
+     */
+    private DefaultWorkflowRuntime scoped() {
+        if (runtime instanceof DefaultWorkflowRuntime scoped) {
+            return scoped;
+        }
+        throw new UnsupportedOperationException(
+                "this runtime cannot answer on a caller's behalf, so isolation cannot be enforced");
     }
 
     /**
@@ -176,8 +195,18 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
         return principals.resolve(CallMetadata.current());
     }
 
-    private OrganizationId organizationOf(String id) {
-        return id == null || id.isBlank() ? OrganizationId.DEFAULT : OrganizationId.of(id);
+    /**
+     * Which organization the work belongs to.
+     *
+     * <p>The caller's, whenever anybody established one. The field on the request
+     * is a convenience for deployments that identify nobody — where it is also the
+     * only thing available, and where there is no isolation to undermine (§22.2).
+     */
+    private OrganizationId organizationOf(String requested) {
+        return caller().organizationIfKnown().orElseGet(() ->
+                requested == null || requested.isBlank()
+                        ? OrganizationId.DEFAULT
+                        : OrganizationId.of(requested));
     }
 
     /**
@@ -190,6 +219,9 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
         try {
             response.onNext(work.get());
             response.onCompleted();
+        } catch (OrganizationMismatchException notTheirs) {
+            response.onError(Status.PERMISSION_DENIED
+                    .withDescription(notTheirs.getMessage()).asRuntimeException());
         } catch (NoSuchElementException missing) {
             response.onError(Status.NOT_FOUND.withDescription(missing.getMessage()).asRuntimeException());
         } catch (IllegalArgumentException malformed) {

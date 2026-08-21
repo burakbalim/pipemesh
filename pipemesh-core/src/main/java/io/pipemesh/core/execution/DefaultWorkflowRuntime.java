@@ -2,6 +2,7 @@ package io.pipemesh.core.execution;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.pipemesh.core.capability.Principal;
 import io.pipemesh.core.intent.IntentResolver;
 import io.pipemesh.core.intent.IntentUnresolvedException;
 import io.pipemesh.core.intent.ResolvedIntent;
@@ -52,6 +53,11 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
 
     @Override
     public ExecutionHandle start(ExecutionRequest request) {
+        // Starting work as somebody else is not only a data question: worker
+        // routing follows the organization, so a caller who could name another's
+        // would reach their workers too (§14, §22.2).
+        refuseIfNotTheirs(request.principal(), request.organization());
+
         ExecutionGraph graph = workflows.find(request.workflowId()).orElseThrow(
                 () -> new NoSuchElementException(
                         "no workflow registered as '" + request.workflowId() + "'"));
@@ -61,6 +67,8 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
 
     @Override
     public ExecutionHandle process(ProcessRequest request) {
+        refuseIfNotTheirs(request.principal(), request.organization());
+
         if (intents == null) {
             throw new IntentUnresolvedException(
                     "this runtime has no intent resolution; name a workflow and use start()");
@@ -104,7 +112,14 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
      */
     @Override
     public ExecutionHandle resume(ExecutionId executionId, ResumeSignal signal) {
+        return resume(executionId, signal, Principal.SYSTEM);
+    }
+
+    /** Resumes on behalf of a caller, who must belong where the execution does. */
+    public ExecutionHandle resume(ExecutionId executionId, ResumeSignal signal, Principal caller) {
         ExecutionRecord record = load(executionId);
+        refuseIfNotTheirs(caller, record.organization());
+
         if (!record.status().isResumable()) {
             return handleOf(record);
         }
@@ -118,7 +133,41 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
 
     @Override
     public Optional<ExecutionSnapshot> snapshot(ExecutionId executionId) {
-        return stateStore.find(executionId).map(this::snapshotOf);
+        return snapshot(executionId, Principal.SYSTEM);
+    }
+
+    /**
+     * Reads an execution on behalf of a caller.
+     *
+     * <p>Variables carry whatever the workflow's steps wrote into them, which is
+     * business data. Handing that to whoever knows an id is the leak §22.2 warned
+     * about when it said labelling is not isolation.
+     */
+    public Optional<ExecutionSnapshot> snapshot(ExecutionId executionId, Principal caller) {
+        return stateStore.find(executionId)
+                .map(record -> {
+                    refuseIfNotTheirs(caller, record.organization());
+                    return snapshotOf(record);
+                });
+    }
+
+    /**
+     * Lets a caller through unless it is known to belong somewhere else.
+     *
+     * <p>A caller nobody identified has no organization, and nothing can be
+     * enforced for it — a deployment without a principal resolver has no tenant
+     * isolation, which is a property of not authenticating anyone rather than
+     * something this could fix.
+     */
+    private void refuseIfNotTheirs(Principal caller, OrganizationId owner) {
+        if (caller.unrestricted()) {
+            return;
+        }
+        caller.organizationIfKnown().ifPresent(mine -> {
+            if (!mine.equals(owner)) {
+                throw new OrganizationMismatchException(caller, owner);
+            }
+        });
     }
 
     private ExecutionRecord load(ExecutionId executionId) {

@@ -1203,9 +1203,16 @@ lands in; retrofitting it means migrating every row and re-labelling every
 dashboard. A single-tenant deployment never has to think about it — the value
 defaults.
 
-Note what this is *not* yet: labelling is not isolation. Enforcing that one
-organization cannot read another's executions, and metering what each consumes,
-belong to a separate piece of work.
+Labelling is not isolation, and the two arrived separately. A caller may not
+read, resume or start work belonging to another organization, and the
+organization comes from the resolved principal rather than from the request — a
+caller naming another's would otherwise reach that organization's workers, since
+worker routing follows the same dimension.
+
+What still belongs to separate work: metering what each organization consumes,
+quotas, and tenant-wide queries. And one honest limit — tenants cannot be kept
+apart without telling callers apart, so a deployment that identifies nobody has
+no isolation to enforce.
 
 ## 22.3 One Trace Across a Wait
 

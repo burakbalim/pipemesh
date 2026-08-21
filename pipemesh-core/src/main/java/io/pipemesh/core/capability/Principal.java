@@ -1,6 +1,9 @@
 package io.pipemesh.core.capability;
 
+import io.pipemesh.core.execution.OrganizationId;
+
 import java.util.List;
+import java.util.Optional;
 import java.util.Objects;
 import java.util.Set;
 
@@ -21,7 +24,11 @@ import java.util.Set;
  * a wildcard hiding inside a set is the kind of thing that gets copied into a
  * config file by accident.
  */
-public record Principal(String id, Set<String> permissions, boolean unrestricted) {
+public record Principal(
+        String id,
+        Set<String> permissions,
+        boolean unrestricted,
+        OrganizationId organization) {
 
     /**
      * The caller that already holds the objects.
@@ -30,10 +37,18 @@ public record Principal(String id, Set<String> permissions, boolean unrestricted
      * workflows. There is nothing to withhold from it, and pretending otherwise
      * would only mean writing permissions that no boundary enforces.
      */
-    public static final Principal SYSTEM = new Principal("system", Set.of(), true);
+    public static final Principal SYSTEM = new Principal("system", Set.of(), true, null);
 
     /** A caller nobody identified: no permissions, and no pretending otherwise. */
-    public static final Principal ANONYMOUS = new Principal("anonymous", Set.of(), false);
+    /**
+     * A caller nobody identified: no permissions, and no organization either.
+     *
+     * <p>The missing organization is the honest part. Tenants cannot be kept apart
+     * without telling callers apart, so a deployment that wires no resolver has no
+     * isolation — and saying so beats a check that quietly passes everything
+     * (§22.2).
+     */
+    public static final Principal ANONYMOUS = new Principal("anonymous", Set.of(), false, null);
 
     public Principal {
         Objects.requireNonNull(id, "principal id");
@@ -44,11 +59,26 @@ public record Principal(String id, Set<String> permissions, boolean unrestricted
     }
 
     public Principal(String id, Set<String> permissions) {
-        this(id, permissions, false);
+        this(id, permissions, false, null);
     }
 
     public static Principal of(String id, String... permissions) {
-        return new Principal(id, Set.of(permissions), false);
+        return new Principal(id, Set.of(permissions), false, null);
+    }
+
+    /** The same caller, known to belong somewhere. */
+    public Principal belongingTo(OrganizationId organization) {
+        return new Principal(id, permissions, unrestricted, organization);
+    }
+
+    /**
+     * Which organization this caller belongs to, when anybody established one.
+     *
+     * <p>Empty means the deployment did not identify the caller, and no isolation
+     * can be enforced for it.
+     */
+    public Optional<OrganizationId> organizationIfKnown() {
+        return Optional.ofNullable(organization);
     }
 
     public boolean holds(String permission) {

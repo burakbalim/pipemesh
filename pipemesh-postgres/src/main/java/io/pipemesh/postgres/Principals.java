@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.pipemesh.core.capability.Principal;
+import io.pipemesh.core.execution.OrganizationId;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -18,6 +19,9 @@ final class Principals {
         ObjectNode json = JsonNodeFactory.instance.objectNode()
                 .put("id", principal.id())
                 .put("unrestricted", principal.unrestricted());
+
+        principal.organizationIfKnown()
+                .ifPresent(organization -> json.put("organization", organization.value()));
 
         var permissions = json.putArray("permissions");
         principal.permissions().stream().sorted().forEach(permissions::add);
@@ -34,6 +38,11 @@ final class Principals {
         Set<String> permissions = new LinkedHashSet<>();
         json.path("permissions").forEach(permission -> permissions.add(permission.asText()));
 
-        return new Principal(id, permissions, json.path("unrestricted").asBoolean(false));
+        String organization = json.path("organization").asText("");
+        return new Principal(
+                id,
+                permissions,
+                json.path("unrestricted").asBoolean(false),
+                organization.isBlank() ? null : OrganizationId.of(organization));
     }
 }

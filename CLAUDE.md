@@ -143,9 +143,11 @@ passes the tests — say so rather than accepting it.
   execution twice.
 - **Trace context is persisted with the state.** An execution resumed after a restart must attach to
   the same trace, or "observable execution" breaks exactly where it matters most.
-- **Every execution carries its organization**, and every span and metric is labelled with it.
-  Labelling is not isolation — enforcing that boundary is separate work, but the dimension must be
-  there from the first write.
+- **Every execution carries its organization**, and every span and metric is labelled with it. A
+  caller may not read, resume, or start work belonging to another organization — and the
+  organization comes from the resolved principal, not from the request. A deployment that
+  identifies nobody has no isolation, which is a property of not authenticating anyone rather than
+  something the runtime can fix; say so rather than implying otherwise (§22.2).
 - **An observer must never fail an execution.** Whatever it throws is contained. Telemetry going
   dark is a bad day; telemetry taking a workflow down is an outage.
 

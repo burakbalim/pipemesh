@@ -15,6 +15,7 @@ import io.pipemesh.core.capability.CapabilityResult;
 import io.pipemesh.core.capability.InMemoryCapabilityRegistry;
 import io.pipemesh.core.capability.Principal;
 import io.pipemesh.core.execution.DefaultWorkflowRuntime;
+import io.pipemesh.core.execution.OrganizationId;
 import io.pipemesh.core.execution.StepExecutors;
 import io.pipemesh.core.execution.WorkflowExecutor;
 import io.pipemesh.core.execution.WorkflowRuntime;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -74,9 +76,11 @@ class RemotePrincipalTest {
         if (caller == null) {
             return Principal.ANONYMOUS;
         }
-        return "manager".equals(caller)
+        Principal principal = "manager".equals(caller)
                 ? Principal.of("manager", "billing.refund")
                 : Principal.of(caller);
+
+        return principal.belongingTo(OrganizationId.of("rival".equals(caller) ? "rival" : "acme"));
     };
 
     private PipeMeshServer server;
@@ -144,6 +148,33 @@ class RemotePrincipalTest {
     void treatsAnUnidentifiedCallerAsHoldingNothing() {
         assertEquals(ExecutionStatus.EXECUTION_STATUS_FAILED, refundAs(null).getStatus(),
                 "failing closed is the only safe direction for a default nobody chose");
+    }
+
+    @Test
+    void refusesToShowOneOrganizationsWorkToAnother() {
+        var acme = refundAs("manager");
+
+        StatusRuntimeException refused = assertThrows(StatusRuntimeException.class,
+                () -> callerNamed("rival").getExecution(
+                        io.pipemesh.proto.v1.GetExecutionRequest.newBuilder()
+                                .setExecutionId(acme.getExecutionId()).build()));
+
+        assertEquals(io.grpc.Status.Code.PERMISSION_DENIED, refused.getStatus().getCode());
+    }
+
+    @Test
+    void takesTheOrganizationFromTheCallerNotTheRequest() {
+        var handle = callerNamed("manager").startExecution(StartExecutionRequest.newBuilder()
+                .setWorkflowId("refund_flow")
+                .setOrganizationId("rival")
+                .build());
+
+        var snapshot = callerNamed("manager").getExecution(
+                io.pipemesh.proto.v1.GetExecutionRequest.newBuilder()
+                        .setExecutionId(handle.getExecutionId()).build());
+
+        assertEquals("acme", snapshot.getOrganizationId(),
+                "the field on the request is a convenience, not a claim the runtime honours");
     }
 
     @Test
