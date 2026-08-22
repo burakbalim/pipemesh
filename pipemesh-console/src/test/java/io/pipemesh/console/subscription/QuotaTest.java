@@ -129,21 +129,16 @@ class QuotaTest extends ConsoleTest {
                 "fifty of fifty means the next one is the fifty-first");
     }
 
+    /** The unlimited plan ships in the schema; this no longer invents one. */
     @Test
     void aPlanWithNoLimitRefusesNothing() {
         String organizationId = organization();
-        jdbc.update("""
-                INSERT INTO console_plan (id, name, max_executions, max_tokens, max_cost_micros)
-                VALUES ('unlimited', 'Unlimited', 0, 0, 0)
-                """);
-        jdbc.update("UPDATE console_organization SET plan_id = 'unlimited' WHERE id = ?", organizationId);
+        jdbc.update("UPDATE console_organization SET plan_id = 'unlimited' WHERE id = ?",
+                organizationId);
         for (int run = 0; run < 100; run++) {
             executionCosting(organizationId, 10_000, 10_000_000, Duration.ZERO);
         }
 
         assertDoesNotThrow(() -> subscriptions.refuseIfExhausted(organizationId));
-
-        jdbc.update("UPDATE console_organization SET plan_id = 'demo' WHERE id = ?", organizationId);
-        jdbc.update("DELETE FROM console_plan WHERE id = 'unlimited'");
     }
 }

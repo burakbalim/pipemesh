@@ -37,6 +37,10 @@ spec:
               value: pipemesh-api:8080
             - name: CONSOLE_BASE_URL
               value: https://console.example.com
+            # Strangers open these accounts, so they land on the demo plan.
+            # An on-premise console sets `unlimited` here instead.
+            - name: CONSOLE_DEFAULT_PLAN
+              value: demo
           resources:
             requests: {cpu: 100m, memory: 512Mi}
             limits: {memory: 1Gi}

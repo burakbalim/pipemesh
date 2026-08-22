@@ -55,6 +55,20 @@ public class ApiErrors {
         return answer(HttpStatus.NOT_FOUND, "api_key_unknown", failure);
     }
 
+    /**
+     * A webhook that did not verify.
+     *
+     * <p>{@code 400} rather than {@code 401}: there is nothing to authenticate
+     * with here and nothing to retry. A provider that gets this has sent
+     * something we will never accept.
+     */
+    @ExceptionHandler(io.pipemesh.console.billing.InvalidWebhookException.class)
+    public ResponseEntity<ApiError> badWebhook(
+            io.pipemesh.console.billing.InvalidWebhookException failure) {
+
+        return answer(HttpStatus.BAD_REQUEST, "webhook_invalid", failure);
+    }
+
     private ResponseEntity<ApiError> answer(HttpStatus status, String code, Exception failure) {
         return ResponseEntity.status(status).body(new ApiError(code, failure.getMessage()));
     }

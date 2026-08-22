@@ -33,6 +33,11 @@ nothing in the runtime changes to accommodate either choice.
 not by counting — and if a deployment ever does need counting, it is the same `QuotaInterceptor`
 with a locally configured plan. A composition, not a branch.
 
+**And no billing.** If you do run the console here — some installs want it for keys and usage —
+set `CONSOLE_DEFAULT_PLAN=unlimited` so accounts are not capped at the demo plan, and configure
+no payment provider. Checkout and the webhook endpoint are then absent rather than refusing:
+an unconfigured deployment answering 200 to an unsigned POST looks exactly like a working one.
+
 **The database is yours.** The `postgres` service here exists because a single node has to get
 one somewhere. Point `PIPEMESH_DB_URL` at an existing server and delete the service; the runtime
 connects to a database, it does not operate one.

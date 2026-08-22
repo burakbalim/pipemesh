@@ -44,7 +44,9 @@ public class ConsoleConfiguration {
             new SchemaMigrator(dataSource).migrate();
             new SchemaMigrator(dataSource, MIGRATIONS, List.of(
                     "V101__console_identity.sql",
-                    "V102__console_api_key.sql")).migrate();
+                    "V102__console_api_key.sql",
+                    "V104__console_plans.sql",
+                    "V105__console_subscription.sql")).migrate();
         };
     }
 }

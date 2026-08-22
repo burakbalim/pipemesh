@@ -1,5 +1,6 @@
 package io.pipemesh.console.identity;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,30 +21,34 @@ public class RegistrationService {
     /** Long enough to survive a mail queue, short enough that a leaked link ages out. */
     private static final Duration LINK_VALIDITY = Duration.ofHours(24);
 
-    private static final String DEMO_PLAN = "demo";
-
     private final IdentityRepository accounts;
     private final PasswordEncoder passwords;
     private final VerificationLinkSender links;
     private final Clock clock;
+    private final String defaultPlan;
 
+    /**
+     * @param defaultPlan which plan a new account lands on. Configuration rather
+     *                    than a constant, because the answer differs by
+     *                    deployment: {@code demo} where accounts are handed out
+     *                    to strangers, {@code unlimited} where somebody bought a
+     *                    licence and being stopped at fifty executions would be
+     *                    absurd. This class used to carry the comment without the
+     *                    behaviour.
+     */
     public RegistrationService(
             IdentityRepository accounts, PasswordEncoder passwords,
-            VerificationLinkSender links, Clock clock) {
+            VerificationLinkSender links, Clock clock,
+            @Value("${console.defaultPlan:demo}") String defaultPlan) {
 
         this.accounts = accounts;
         this.passwords = passwords;
         this.links = links;
         this.clock = clock;
+        this.defaultPlan = defaultPlan;
     }
 
-    /**
-     * Creates the organization and its first user, on the demo plan.
-     *
-     * <p>The plan is looked up by id rather than decided here: which plan a new
-     * account lands on is configuration, and a constant in a service is a
-     * decision nobody can change without a deploy (§39.1).
-     */
+    /** Creates the organization and its first user, on the configured plan. */
     @Transactional
     public Organization register(String organizationName, String email, String password) {
         String address = normalise(email);
@@ -52,7 +57,7 @@ public class RegistrationService {
         }
 
         Organization organization = new Organization(
-                UUID.randomUUID().toString(), organizationName, DEMO_PLAN, clock.instant());
+                UUID.randomUUID().toString(), organizationName, defaultPlan, clock.instant());
         accounts.insertOrganization(organization);
 
         ConsoleUser user = new ConsoleUser(
