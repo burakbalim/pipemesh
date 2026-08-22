@@ -42,4 +42,33 @@ public interface ExecutionLeases {
 
     /** Gives an execution back, whether it finished or the driver gave up. */
     void release(ExecutionLease lease);
+
+    /**
+     * How much work is waiting for a driver right now.
+     *
+     * <p>Here rather than on the state store because "waiting" is defined by
+     * leases: drivable, and either never claimed or claimed by somebody who
+     * stopped renewing. The store does not know about leases and should not
+     * (§28.1).
+     */
+    Backlog backlog();
+
+    /**
+     * What is queued, and how long the front of the queue has been there.
+     *
+     * <p>{@code oldestWaitingMillis} is the one to scale on. Depth feeds back on
+     * itself — more drivers drain it, it falls, they scale down, it rises — and
+     * says nothing about whether the number is a problem: fifty executions are
+     * fine at 200ms each and serious at forty seconds. Age is the delay somebody
+     * is actually experiencing, and a target for it is a sentence a person can
+     * defend.
+     *
+     * <p>An empty queue reports zeros rather than nothing. A gauge that stops
+     * being reported is not read as "no backlog"; it is read as the last value,
+     * forever.
+     */
+    record Backlog(long size, long oldestWaitingMillis) {
+
+        public static final Backlog EMPTY = new Backlog(0, 0);
+    }
 }

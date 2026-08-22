@@ -68,6 +68,27 @@ public final class InMemoryExecutionLeases implements ExecutionLeases {
         held.remove(lease.executionId(), lease);
     }
 
+    @Override
+    public Backlog backlog() {
+        long now = clock.millis();
+        List<ExecutionRecord> waiting = executions.runnable().stream()
+                .filter(record -> unclaimed(record.executionId(), now))
+                .toList();
+
+        return waiting.isEmpty() ? Backlog.EMPTY : new Backlog(
+                waiting.size(),
+                now - waiting.stream()
+                        .mapToLong(ExecutionRecord::updatedAtEpochMillis)
+                        .min()
+                        .orElse(now));
+    }
+
+    /** Claimed work is running work, not waiting work. */
+    private boolean unclaimed(ExecutionId executionId, long now) {
+        ExecutionLease held = this.held.get(executionId);
+        return held == null || held.expiredAt(now);
+    }
+
     /** Oldest first, so a long queue drains rather than starving its own head. */
     private List<ExecutionRecord> oldestFirst() {
         return executions.runnable().stream()

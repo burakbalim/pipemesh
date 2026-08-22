@@ -234,6 +234,26 @@ class DistributedDispatchTest {
                 "waiting is not stuck");
     }
 
+    /** The same predicate the claim uses, asked instead of acted on (§22.1). */
+    @Test
+    void theBacklogCountsWhatNobodyIsDriving() {
+        Instance instance = boot("pod-a");
+        enqueue(instance, "review");
+        enqueue(instance, "review");
+
+        assertEquals(2, instance.leases().backlog().size());
+
+        instance.leases().claim("pod-a", Duration.ofMinutes(5), 1);
+
+        assertEquals(1, instance.leases().backlog().size(), "one is being driven now");
+    }
+
+    @Test
+    void theBacklogIsEmptyWhenNothingIsQueued() {
+        assertEquals(0, boot("pod-a").leases().backlog().size());
+        assertEquals(0, boot("pod-a").leases().backlog().oldestWaitingMillis());
+    }
+
     @Test
     void oneRoundNeverTakesMoreThanItsBatch() {
         Instance instance = boot("pod-a");

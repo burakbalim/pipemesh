@@ -18,6 +18,7 @@ kubectl apply -f namespace.yaml
 kubectl apply -f secrets.example.yaml   # after replacing every value in it
 kubectl apply -f migrate-job.yaml
 kubectl apply -f api.yaml -f dispatcher.yaml -f console.yaml -f ingress.yaml
+kubectl apply -f dispatcher-hpa.yaml     # needs a metrics adapter reading OTLP
 ```
 
 ## What is deliberately not here
@@ -28,8 +29,8 @@ operator, a machine in the corner — all the same to it.
 **No TLS in the processes.** It terminates at the ingress, and pods speak plaintext inside the
 cluster. Moving certificates into the application gives every pod a renewal to get wrong.
 
-**No autoscaling policy.** The `HorizontalPodAutoscaler` targets are an operations decision, and
-queue depth as a metric is observability work (DESIGN.md §22.1).
+**No autoscaling *targets*.** `dispatcher-hpa.yaml` shows the shape and the metric to use; ten
+seconds is an example, not a recommendation. What delay is acceptable is a business decision.
 
 **No payment.** Plans and quotas are enforced; nobody is charged. That is a separate contract and
 a separate security surface.
@@ -42,6 +43,16 @@ caller's thread — which is the right default for a lone process and exactly wr
 
 The two are separate questions and separate variables. Setting only the first would give you an
 API replica that quietly does the dispatcher's job.
+
+## Scaling the dispatchers
+
+On `pipemesh.backlog.age_seconds` — how long the oldest unclaimed execution has been waiting —
+rather than on how many are queued. Depth feeds back on itself and says nothing about whether
+the number is a problem; age is the delay somebody is experiencing.
+
+Both gauges are published, and **neither may be summed across replicas**. Every process reports
+the same fact about the same database, so a sum multiplies it by the replica count. That is why
+they carry no instance attribute.
 
 ## Live updates cross processes
 

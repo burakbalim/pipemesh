@@ -1,0 +1,42 @@
+# Scale drivers by how long work is waiting, not by how much of it there is.
+#
+# Depth feeds back on itself — more drivers drain it, it falls, they scale down,
+# it rises — and it does not say whether the number is a problem: fifty queued
+# executions are fine at 200ms each and serious at forty seconds. Age is the
+# delay somebody is experiencing, and the target below is a sentence a person
+# can defend: nothing should wait more than ten seconds for a driver.
+#
+# The metric comes from pipemesh.backlog.age_seconds, which every replica
+# reports identically because it is a fact about the database rather than about
+# a process. It must be read as an average or a max, never a sum — a sum
+# multiplies it by the replica count, and the autoscaler chases a number nobody
+# is experiencing.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pipemesh-dispatcher
+  namespace: pipemesh
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pipemesh-dispatcher
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    - type: Pods
+      pods:
+        metric:
+          name: pipemesh_backlog_age_seconds
+        target:
+          # Averaged across pods, which is safe here precisely because every pod
+          # reports the same value.
+          type: AverageValue
+          averageValue: "10"
+  behavior:
+    scaleDown:
+      # Slower down than up: a queue that just drained is not proof the load is
+      # gone, and flapping costs more than a spare driver.
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 30

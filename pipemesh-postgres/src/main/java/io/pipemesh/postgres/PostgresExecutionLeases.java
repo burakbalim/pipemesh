@@ -66,6 +66,23 @@ public final class PostgresExecutionLeases implements ExecutionLeases {
              WHERE execution_id = ? AND owner = ? AND token = ?
             """;
 
+    /**
+     * The same predicate {@code CLAIM} uses, asked rather than acted on.
+     *
+     * <p>{@code WAITING} is not in the drivable set and that is what keeps this
+     * metric honest: an execution that has been waiting three days for an
+     * approval is a waiting person, not a queue, and counting it would have an
+     * autoscaler adding drivers forever.
+     */
+    private static final String BACKLOG = """
+            SELECT count(*)                                                  AS waiting,
+                   coalesce(max(extract(epoch from (now() - e.updated_at))), 0) AS oldest_seconds
+              FROM workflow_execution e
+              LEFT JOIN workflow_lease l ON l.execution_id = e.execution_id
+             WHERE e.status IN ('CREATED', 'RUNNING')
+               AND (l.execution_id IS NULL OR l.expires_at <= ?)
+            """;
+
     private final DataSource dataSource;
     private final Clock clock;
 
@@ -137,6 +154,23 @@ public final class PostgresExecutionLeases implements ExecutionLeases {
             statement.executeUpdate();
         } catch (SQLException failure) {
             throw new IllegalStateException("could not release " + lease.executionId(), failure);
+        }
+    }
+
+    @Override
+    public Backlog backlog() {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(BACKLOG)) {
+
+            statement.setLong(1, clock.millis());
+            try (ResultSet rows = statement.executeQuery()) {
+                rows.next();
+                return new Backlog(
+                        rows.getLong("waiting"),
+                        (long) (rows.getDouble("oldest_seconds") * 1_000));
+            }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("could not measure the backlog", failure);
         }
     }
 

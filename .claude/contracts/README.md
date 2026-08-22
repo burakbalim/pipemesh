@@ -38,7 +38,7 @@ onunla çelişmez.
 | 21 | [runtime-distribution.md](runtime-distribution.md) | §26.3 — çalıştırılabilir runtime, kendi şeması, on-prem tek düğüm | **Tamam** (2026-08-21) |
 | 22 | [cloud-deployment.md](cloud-deployment.md) | §30.2 — süreçler arası izleme, üç deployment, TLS, e-posta | **Tamam** (2026-08-22) |
 | 23 | [billing-and-payment.md](billing-and-payment.md) | Ödeme SPI'si, abonelik durumu, plan değişimi; on-prem'de yok | Aşama 1-3 tamam |
-| 24 | [backlog-metrics.md](backlog-metrics.md) | §22.1 — bekleyen işin yaşı, dispatcher ölçekleme sinyali | Draft |
+| 24 | [backlog-metrics.md](backlog-metrics.md) | §22.1 — bekleyen işin yaşı, dispatcher ölçekleme sinyali | **Tamam** (2026-08-22) |
 | 25 | [release-and-versioning.md](release-and-versioning.md) | §26.1 — sürüm numarasının vaadi, image ve SDK yayını | Draft |
 | 26 | [update-replay.md](update-replay.md) | §30.1 — dayanıklı imleç, kaçırılan olayların kurtarılması | Draft |
 
