@@ -10,6 +10,7 @@ import * as path from "node:path";
 import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
 
+import { authMetadata, resolveKey } from "./credentials";
 import { fromStruct, toStruct } from "./structs";
 
 const PROTO_PATH = path.resolve(__dirname, "..", "proto", "pipemesh.proto");
@@ -50,6 +51,8 @@ export class CapabilityFailure extends Error {
 }
 
 export interface WorkerOptions {
+  /** Identifies this worker, the same way it identifies a client. */
+  apiKey?: string;
   organization?: string;
   credentials?: grpc.ChannelCredentials;
 }
@@ -60,9 +63,15 @@ export class PipeMeshWorker {
   private readonly capabilities = new Map<string, CapabilityFunction>();
   private stream?: grpc.ClientDuplexStream<unknown, any>;
   private stopping = false;
+  private readonly metadata: grpc.Metadata;
 
   constructor(target = "localhost:8080", options: WorkerOptions = {}) {
     this.organization = options.organization ?? "default";
+    // A worker is a caller too. Its registration is bound to an organization
+    // (§14), so a deployment that authenticates has to be able to tell which one
+    // is connecting — an authenticated client with an anonymous worker would be
+    // half a boundary.
+    this.metadata = authMetadata(resolveKey(options.apiKey), options.credentials !== undefined);
     this.client = new proto.pipemesh.v1.CapabilityWorker(
       target,
       options.credentials ?? grpc.credentials.createInsecure(),
@@ -79,6 +88,7 @@ export class PipeMeshWorker {
   start(): this {
     const stream = (this.client as unknown as Record<string, Function>).Connect.call(
       this.client,
+      this.metadata,
     ) as grpc.ClientDuplexStream<unknown, any>;
     this.stream = stream;
 

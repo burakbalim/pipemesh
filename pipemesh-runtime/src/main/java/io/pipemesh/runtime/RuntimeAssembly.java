@@ -84,10 +84,27 @@ public final class RuntimeAssembly implements AutoCloseable {
     private final RecoveryScheduler dispatching;
 
     public static RuntimeAssembly of(RuntimeSettings settings) throws IOException {
-        return new RuntimeAssembly(settings);
+        return of(settings, PrincipalResolver.ANONYMOUS, List.of(), List.of());
     }
 
-    private RuntimeAssembly(RuntimeSettings settings) throws IOException {
+    /**
+     * @param principals         who a caller is. The default identifies nobody,
+     *                           which is honest for a single-tenant install and
+     *                           wrong for a shared one — the console supplies a
+     *                           real one (§23).
+     * @param watchPermissions   what a caller must hold to watch an execution
+     * @param publishPermissions what a caller must hold to publish an event
+     */
+    public static RuntimeAssembly of(
+            RuntimeSettings settings, PrincipalResolver principals,
+            List<String> watchPermissions, List<String> publishPermissions) throws IOException {
+
+        return new RuntimeAssembly(settings, principals, watchPermissions, publishPermissions);
+    }
+
+    private RuntimeAssembly(
+            RuntimeSettings settings, PrincipalResolver principals,
+            List<String> watchPermissions, List<String> publishPermissions) throws IOException {
         DataSource dataSource = dataSourceOf(settings);
         announce(settings);
 
@@ -172,10 +189,10 @@ public final class RuntimeAssembly implements AutoCloseable {
 
         this.server = new PipeMeshServer(
                 workflowRuntime, broker, settings.port(), null, workers,
-                PrincipalResolver.ANONYMOUS, List.of(), List.of(),
+                principals, watchPermissions, List.of(),
                 // Waiting was already built; this is what lets an application on
                 // the other side of the wire wake it (§9.7).
-                new EventPublisher(waits, workflowRuntime), List.of());
+                new EventPublisher(waits, workflowRuntime), publishPermissions);
     }
 
     public RuntimeAssembly start() throws IOException {

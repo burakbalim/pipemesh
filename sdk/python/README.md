@@ -43,6 +43,23 @@ except PipeMeshError as failure:
 The status code is kept because the useful question after a failure is whether it was this caller's
 mistake or the server's, and the answer decides whether retrying makes sense.
 
+## Reaching a deployment that authenticates
+
+```python
+mesh = PipeMesh("api.example.com:443", api_key="pm_...")   # or PIPEMESH_API_KEY
+```
+
+The key travels in call metadata, never in a request body: a request carrying its own answer to
+"who am I" has not been authenticated, it has been asked politely. It identifies an organization,
+so the runtime knows whose executions these are — and against an install that identifies nobody
+there is nothing to send, and an absent key changes nothing.
+
+Workers take the same option, and need it for the same reason: a worker's registration is bound
+to an organization too.
+
+Sending a key over a plaintext connection warns rather than refuses. Plaintext is right on a
+laptop and a leak anywhere else.
+
 ## Serving a LangChain chain
 
 A chain reaches the runtime the same way any other application code does — over the worker

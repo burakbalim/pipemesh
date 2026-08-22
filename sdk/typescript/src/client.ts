@@ -9,6 +9,7 @@ import * as path from "node:path";
 import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
 
+import { authMetadata, resolveKey } from "./credentials";
 import { fromStruct, toStruct } from "./structs";
 
 /**
@@ -150,15 +151,23 @@ export class PipeMeshError extends Error {
 
 export interface PipeMeshOptions {
   organization?: string;
+  /**
+   * Identifies this caller to a deployment that authenticates. Read from
+   * `PIPEMESH_API_KEY` when not given; against a deployment that identifies
+   * nobody there is nothing to send, and an absent key changes nothing.
+   */
+  apiKey?: string;
   credentials?: grpc.ChannelCredentials;
 }
 
 export class PipeMesh {
   private readonly client: grpc.Client;
   private readonly organization: string;
+  private readonly metadata: grpc.Metadata;
 
   constructor(target = "localhost:8080", options: PipeMeshOptions = {}) {
     this.organization = options.organization ?? "default";
+    this.metadata = authMetadata(resolveKey(options.apiKey), options.credentials !== undefined);
     this.client = new proto.pipemesh.v1.PipeMesh(
       target,
       options.credentials ?? grpc.credentials.createInsecure(),
@@ -302,19 +311,24 @@ export class PipeMesh {
       executionId,
       exclude,
       fromStep,
-    }) as grpc.ClientReadableStream<unknown>;
+    }, this.metadata) as grpc.ClientReadableStream<unknown>;
   }
 
   private unary<T>(method: string, request: unknown, map: (reply: any) => T): Promise<T> {
     return new Promise((resolve, reject) => {
       const call = (this.client as unknown as Record<string, Function>)[method];
-      call.call(this.client, request, (failure: grpc.ServiceError | null, reply: unknown) => {
-        if (failure) {
-          reject(new PipeMeshError(failure.details, failure.code));
-          return;
-        }
-        resolve(map(reply));
-      });
+      call.call(
+        this.client,
+        request,
+        this.metadata,
+        (failure: grpc.ServiceError | null, reply: unknown) => {
+          if (failure) {
+            reject(new PipeMeshError(failure.details, failure.code));
+            return;
+          }
+          resolve(map(reply));
+        },
+      );
     });
   }
 }

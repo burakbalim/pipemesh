@@ -216,3 +216,30 @@ def test_the_wrong_correlation_wakes_nobody(mesh):
 
     assert mesh.publish("payment_completed", "B-9999", {}) == []
     assert mesh.get(handle.execution_id).status is ExecutionStatus.WAITING
+
+
+def test_a_key_is_read_from_the_environment_when_not_passed(monkeypatch, runtime_address: str):
+    monkeypatch.setenv("PIPEMESH_API_KEY", "pm_from_env")
+
+    from pipemesh import credentials
+
+    assert credentials.resolve(None) == "pm_from_env"
+    assert credentials.resolve("pm_explicit") == "pm_explicit", "an argument wins"
+
+
+def test_sending_a_key_over_plaintext_warns_rather_than_refuses(runtime_address: str):
+    import warnings
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with PipeMesh(runtime_address, organization="acme", api_key="pm_anything"):
+            pass
+
+    assert any("plaintext" in str(warning.message) for warning in caught), \
+        "silence is how an unencrypted key leaks"
+
+
+def test_no_key_means_no_header_and_nothing_changes(mesh: PipeMesh):
+    handle = mesh.execute("policy_check")
+
+    assert handle.status is ExecutionStatus.CANCELLED, "the deployment identifies nobody"

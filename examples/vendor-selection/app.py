@@ -29,6 +29,10 @@ from pipemesh import CapabilityFailure, ExecutionStatus, PipeMesh, PipeMeshWorke
 RUNTIME = os.environ.get("PIPEMESH_TARGET", "localhost:8080")
 ORGANIZATION = os.environ.get("PIPEMESH_ORGANIZATION", "acme")
 
+# Against a deployment that authenticates, set PIPEMESH_API_KEY — the SDK reads
+# it and sends it with every call. A single-node install identifies nobody, so
+# there is nothing to send and nothing here changes.
+
 
 # ---------------------------------------------------------------------------
 # The company's own code, reached as capabilities.

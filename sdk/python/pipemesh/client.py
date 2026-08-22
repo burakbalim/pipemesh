@@ -9,6 +9,7 @@ from typing import Any, Iterator, Mapping, Optional
 import grpc
 from google.protobuf import json_format, struct_pb2
 
+from . import credentials
 from . import pipemesh_pb2 as pb
 from . import pipemesh_pb2_grpc as rpc
 
@@ -146,11 +147,22 @@ class PipeMesh:
         target: str = "localhost:8080",
         *,
         organization: str = "default",
+        api_key: Optional[str] = None,
         channel: Optional[grpc.Channel] = None,
     ) -> None:
+        """``api_key`` identifies this caller to a deployment that authenticates.
+
+        Read from ``PIPEMESH_API_KEY`` when not passed, so it never has to be
+        written into code that gets committed. Against a deployment that
+        identifies nobody there is nothing to send, and an absent key changes
+        nothing.
+        """
+        key = credentials.resolve(api_key)
+
         self._organization = organization
         self._owns_channel = channel is None
-        self._channel = channel or grpc.insecure_channel(target)
+        self._channel = grpc.intercept_channel(
+            channel or credentials.channel_for(target, key), *credentials.interceptors(key))
         self._stub = rpc.PipeMeshStub(self._channel)
 
     def execute(

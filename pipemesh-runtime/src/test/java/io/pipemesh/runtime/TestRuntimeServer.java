@@ -1,7 +1,14 @@
 package io.pipemesh.runtime;
 
+import io.grpc.Metadata;
+import io.pipemesh.core.capability.Principal;
+import io.pipemesh.core.execution.OrganizationId;
+import io.pipemesh.grpc.PrincipalResolver;
+
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A runtime on a real port, for the SDK tests in other languages to call.
@@ -29,10 +36,43 @@ public final class TestRuntimeServer {
                 RuntimeSettings.PORT, "0",
                 RuntimeSettings.DISPATCH, "off")::get);
 
-        RuntimeAssembly runtime = RuntimeAssembly.of(settings).start();
+        // With PIPEMESH_TEST_KEY set, the server identifies callers by an API
+        // key, so an SDK test can show that sending one changes the answer.
+        // Without it, nothing is identified — which is the default everywhere
+        // else and keeps the rest of the suite unchanged.
+        String expected = System.getenv("PIPEMESH_TEST_KEY");
+
+        RuntimeAssembly runtime = expected == null
+                ? RuntimeAssembly.of(settings).start()
+                : RuntimeAssembly.of(
+                        settings, keyResolver(expected),
+                        List.of("stream:watch"), List.of("event:publish")).start();
         System.out.println(runtime.port());
         System.out.flush();
         runtime.awaitTermination();
+    }
+
+    /**
+     * The smallest thing that behaves like a real deployment's resolver: one key,
+     * one organization, and everything else anonymous.
+     *
+     * <p>Deliberately not a stand-in for {@code ConsolePrincipalResolver} — that
+     * one has its own tests. What this proves is the SDK side: that a key sent
+     * over the wire arrives, and that not sending one is refused.
+     */
+    private static PrincipalResolver keyResolver(String expected) {
+        Metadata.Key<String> authorization =
+                Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
+
+        return metadata -> {
+            String header = metadata.get(authorization);
+            if (header == null || !header.equals("Bearer " + expected)) {
+                return Principal.ANONYMOUS;
+            }
+            return new Principal(
+                    "test-key", Set.of("stream:watch", "event:publish"), false,
+                    OrganizationId.of("acme"));
+        };
     }
 
     private TestRuntimeServer() {

@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, Mapping, Optional
 import grpc
 from google.protobuf import json_format, struct_pb2
 
+from . import credentials
 from . import pipemesh_pb2 as pb
 from . import pipemesh_pb2_grpc as rpc
 
@@ -56,12 +57,20 @@ class PipeMeshWorker:
         target: str = "localhost:8080",
         *,
         organization: str = "default",
+        api_key: Optional[str] = None,
         concurrency: int = 8,
         channel: Optional[grpc.Channel] = None,
     ) -> None:
+        # A worker is a caller too. Its registration is bound to an organization
+        # (§14), so a deployment that authenticates has to be able to tell which
+        # one is connecting — an authenticated client with an anonymous worker
+        # would be half a boundary.
+        key = credentials.resolve(api_key)
+
         self._organization = organization
         self._owns_channel = channel is None
-        self._channel = channel or grpc.insecure_channel(target)
+        self._channel = grpc.intercept_channel(
+            channel or credentials.channel_for(target, key), *credentials.interceptors(key))
         self._stub = rpc.CapabilityWorkerStub(self._channel)
         self._capabilities: Dict[str, Capability] = {}
 

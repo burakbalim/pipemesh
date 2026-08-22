@@ -34,3 +34,4 @@ packages together is never required.
 - Payment as an optional provider; absent entirely on an install without one (#23)
 - Backlog age as the signal to scale drivers on (#24)
 - `examples/vendor-selection` — a whole flow: model, capabilities, a choice, an approval
+- Python and TypeScript clients and workers send an API key (#28)
