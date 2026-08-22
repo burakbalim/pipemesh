@@ -85,6 +85,7 @@ public final class InMemoryStateStore implements StateStore {
                 .toList();
     }
 
+    @Override
     public List<StepRecord> historyOf(ExecutionId executionId) {
         return List.copyOf(history.getOrDefault(executionId, List.of()));
     }

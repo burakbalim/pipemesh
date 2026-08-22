@@ -26,6 +26,7 @@ import io.pipemesh.core.workflow.WorkflowCompiler;
 import io.pipemesh.core.workflow.WorkflowDefinitionReader;
 import io.pipemesh.core.workflow.WorkflowId;
 import io.pipemesh.proto.v1.ExecutionStatus;
+import io.pipemesh.proto.v1.ExecutionUpdate;
 import io.pipemesh.proto.v1.GetExecutionRequest;
 import io.pipemesh.proto.v1.PipeMeshGrpc;
 import io.pipemesh.proto.v1.ProcessMessageRequest;
@@ -130,6 +131,15 @@ class PipeMeshServiceTest {
 
     private static String numbered(io.pipemesh.proto.v1.ExecutionUpdate update) {
         return update.getSequence() + ":" + update.getUpdateCase().name();
+    }
+
+    /** Under a hundred, so it finishes without asking anybody. */
+    private io.pipemesh.proto.v1.ExecutionHandle startCheap() {
+        return client.startExecution(StartExecutionRequest.newBuilder()
+                .setWorkflowId("venue_booking")
+                .setOrganizationId("acme")
+                .setInput(input("{\"price\":50}"))
+                .build());
     }
 
     private io.pipemesh.proto.v1.ExecutionHandle startExpensive() {
@@ -255,9 +265,14 @@ class PipeMeshServiceTest {
             kinds.add(updates.next().getUpdateCase().name());
         }
 
+        // The two leading STEP_FINISHED entries are replayed: this watcher
+        // arrived after the condition ran and the approval suspended, and a
+        // cursor of zero means "I have seen nothing" (§30.1). Before replay the
+        // watcher simply never learned they happened.
         assertEquals(
-                List.of("STARTED", "RESUMED", "STEP_FINISHED",
-                        "STEP_STARTED", "STEP_FINISHED", "FINISHED"), kinds,
+                List.of("STARTED", "STEP_FINISHED", "STEP_FINISHED",
+                        "RESUMED", "STEP_FINISHED", "STEP_STARTED", "STEP_FINISHED", "FINISHED"),
+                kinds,
                 "the stream opens with where things stand and ends when the execution does");
     }
 
@@ -309,10 +324,10 @@ class PipeMeshServiceTest {
         }
 
         assertEquals(
-                List.of("0:STARTED", "1:RESUMED", "2:STEP_FINISHED",
-                        "3:STEP_STARTED", "4:STEP_FINISHED", "5:FINISHED"),
+                List.of("0:STARTED", "1:STEP_FINISHED", "2:STEP_FINISHED", "3:RESUMED",
+                        "4:STEP_FINISHED", "5:STEP_STARTED", "6:STEP_FINISHED", "7:FINISHED"),
                 numbered,
-                "one counter, no gaps, and the snapshot is 0");
+                "one counter for this stream: snapshot, then replay, then live");
     }
 
     /**
@@ -359,7 +374,132 @@ class PipeMeshServiceTest {
             kinds.add(updates.next().getUpdateCase().name());
         }
 
-        assertEquals(List.of("RESUMED", "STEP_FINISHED", "STEP_FINISHED", "FINISHED"), kinds,
-                "progress declined, everything else still delivered");
+        assertEquals(
+                List.of("STEP_FINISHED", "STEP_FINISHED", "RESUMED",
+                        "STEP_FINISHED", "STEP_FINISHED", "FINISHED"),
+                kinds,
+                "progress declined; the replayed history and everything else still delivered");
+    }
+    /**
+     * Reads until the named kind arrives, so a test never drains a stream that
+     * is waiting for a person — and never acts on the channel without reading
+     * first, which is what stalls a blocking stub.
+     */
+    private List<ExecutionUpdate> drain(Iterator<ExecutionUpdate> updates, String until) {
+        List<ExecutionUpdate> seen = new ArrayList<>();
+        for (int read = 0; read < 30; read++) {
+            ExecutionUpdate update = updates.next();
+            seen.add(update);
+            if (until.equals(update.getUpdateCase().name())) {
+                return seen;
+            }
+        }
+        throw new AssertionError("never reached " + until + ": " + seen.size() + " updates");
+    }
+
+    @Test
+    void aFinishedExecutionCanStillBeReadBackInFull() {
+        var handle = startCheap();
+
+        Iterator<ExecutionUpdate> updates = client.watchExecution(
+                WatchExecutionRequest.newBuilder()
+                        .setExecutionId(handle.getExecutionId()).build());
+
+        List<String> kinds = new ArrayList<>();
+        while (updates.hasNext()) {
+            kinds.add(updates.next().getUpdateCase().name());
+        }
+
+        assertEquals("STARTED", kinds.get(0), "where things stood on arrival");
+        assertTrue(kinds.contains("STEP_FINISHED"),
+                "the history is what happened, and it is still there: " + kinds);
+    }
+
+    @Test
+    void aCursorSkipsWhatTheClientAlreadySaw() {
+        var handle = startCheap();
+
+        Iterator<ExecutionUpdate> everything = client.watchExecution(
+                WatchExecutionRequest.newBuilder()
+                        .setExecutionId(handle.getExecutionId()).build());
+        long steps = 0;
+        while (everything.hasNext()) {
+            if (everything.next().getUpdateCase() == ExecutionUpdate.UpdateCase.STEP_FINISHED) {
+                steps++;
+            }
+        }
+        assertTrue(steps > 0, "there was something to skip");
+
+        Iterator<ExecutionUpdate> resumed = client.watchExecution(
+                WatchExecutionRequest.newBuilder()
+                        .setExecutionId(handle.getExecutionId())
+                        .setFromStep(steps)
+                        .build());
+
+        List<String> kinds = new ArrayList<>();
+        while (resumed.hasNext()) {
+            kinds.add(resumed.next().getUpdateCase().name());
+        }
+
+        assertEquals(List.of("STARTED"), kinds,
+                "already seen, so nothing but the arrival snapshot: " + kinds);
+    }
+
+    /** The point of the whole thing: a watcher that arrives late is not blind. */
+    @Test
+    void aWatcherThatArrivesAfterTheStepsStillLearnsAboutThem() {
+        var waiting = startExpensive();
+
+        Iterator<ExecutionUpdate> updates = client.watchExecution(
+                WatchExecutionRequest.newBuilder()
+                        .setExecutionId(waiting.getExecutionId()).build());
+
+        List<ExecutionUpdate> seen = drain(updates, "STEP_FINISHED");
+
+        assertEquals("STARTED", seen.get(0).getUpdateCase().name());
+        assertEquals("check_price", seen.get(seen.size() - 1).getStepFinished().getStepId(),
+                "the step that ran before anybody was listening");
+    }
+
+    @Test
+    void aCursorPastTheEndAsksForNothingRatherThanFailing() {
+        var handle = startCheap();
+
+        Iterator<ExecutionUpdate> updates = client.watchExecution(
+                WatchExecutionRequest.newBuilder()
+                        .setExecutionId(handle.getExecutionId())
+                        .setFromStep(9_999)
+                        .build());
+
+        List<String> kinds = new ArrayList<>();
+        while (updates.hasNext()) {
+            kinds.add(updates.next().getUpdateCase().name());
+        }
+
+        assertEquals(List.of("STARTED"), kinds);
+    }
+
+    /** Replay is an addition; a live watcher still sees everything live. */
+    @Test
+    void aWatcherWithNoCursorStillSeesEverythingLive() {
+        var waiting = startExpensive();
+
+        Iterator<ExecutionUpdate> updates = client.watchExecution(
+                WatchExecutionRequest.newBuilder()
+                        .setExecutionId(waiting.getExecutionId()).build());
+        // The suspension itself happened before this watcher existed, so it
+        // arrives as a replayed step rather than as a live event. Reading one is
+        // still what matters here: acting on the channel without draining it is
+        // what stalls a blocking stub.
+        drain(updates, "STEP_FINISHED");
+
+        approve(waiting.getExecutionId());
+
+        List<String> kinds = new ArrayList<>();
+        while (updates.hasNext()) {
+            kinds.add(updates.next().getUpdateCase().name());
+        }
+
+        assertEquals("FINISHED", kinds.get(kinds.size() - 1), kinds.toString());
     }
 }

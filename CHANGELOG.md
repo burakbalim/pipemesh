@@ -22,6 +22,8 @@ packages together is never required.
 - `StartExecutionRequest.workflow_version` — pin a run to one workflow version (#9)
 - `WatchExecutionRequest.exclude` and `UpdateKind` — decline tokens or progress (#20)
 - `ExecutionUpdate.step_started`, `ExecutionUpdate.recovered` — progress while a step runs (#20)
+- `WatchExecutionRequest.from_step` — resume a dropped stream (#26)
+- `WatchExecutionRequest.from_sequence` is deprecated; it was never implemented (#26)
 
 ### Added
 

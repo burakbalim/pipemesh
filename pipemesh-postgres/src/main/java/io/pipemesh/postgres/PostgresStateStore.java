@@ -147,6 +147,7 @@ public final class PostgresStateStore implements StateStore {
         }
     }
 
+    @Override
     public List<StepRecord> historyOf(ExecutionId executionId) {
         String sql = """
                 SELECT execution_id, step_id, step_type, outcome, input_snapshot, output_snapshot,

@@ -24,14 +24,20 @@ import io.pipemesh.proto.v1.GetExecutionRequest;
 import io.pipemesh.proto.v1.PipeMeshGrpc;
 import io.pipemesh.proto.v1.ProcessMessageRequest;
 import io.pipemesh.proto.v1.StartExecutionRequest;
+import io.pipemesh.proto.v1.StepFinished;
 import io.pipemesh.proto.v1.SubmitApprovalRequest;
 import io.pipemesh.proto.v1.WatchExecutionRequest;
 
+import io.pipemesh.core.state.StepRecord;
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -202,6 +208,12 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
         // Fully qualified: the proto has a message of the same name.
         Optional<io.pipemesh.core.execution.ExecutionSnapshot> arrival =
                 runtime.snapshot(executionId);
+        // One counter for this stream, and this stream only: the snapshot is
+        // zero, replayed history follows, and live updates carry on from there.
+        // Nothing else shares it, so it never goes backwards for a watcher that
+        // replayed or starts halfway for one that joined late.
+        AtomicLong sequence = new AtomicLong();
+
         arrival.ifPresent(snapshot -> call.onNext(ExecutionUpdate.newBuilder()
                 .setSequence(0)
                 .setAt(WireTypes.toWire(System.currentTimeMillis()))
@@ -212,8 +224,10 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
 
         // An execution that is already over will never publish again, so waiting
         // for its "finished" event means waiting forever. The javadoc above has
-        // always promised otherwise; this is what makes that true.
+        // always promised otherwise; this is what makes that true. Its history is
+        // still worth sending: that is the whole of what happened.
         if (arrival.map(snapshot -> snapshot.status().isTerminal()).orElse(true)) {
+            replay(executionId, request.getFromStep(), sequence, call::onNext);
             call.onCompleted();
             return;
         }
@@ -224,8 +238,73 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
             unsubscribe.get().close();
         });
 
-        unsubscribe.set(broker.watch(executionId, Set.copyOf(request.getExcludeList()), pump::offer));
+        // Subscribed before the history is read, and holding what arrives while
+        // it is. Reading first would lose everything that happened in between —
+        // the same loss sequence 0 exists to prevent — and writing live updates
+        // before older replayed ones would hand the client the past after the
+        // present.
+        List<ExecutionUpdate> held = new ArrayList<>();
+        AtomicBoolean replaying = new AtomicBoolean(true);
+
+        unsubscribe.set(broker.watch(executionId, Set.copyOf(request.getExcludeList()), update -> {
+            synchronized (held) {
+                if (replaying.get()) {
+                    held.add(update);
+                    return;
+                }
+            }
+            pump.offer(numbered(update, sequence));
+        }));
+
+        replay(executionId, request.getFromStep(), sequence, pump::offer);
+
+        synchronized (held) {
+            replaying.set(false);
+            held.forEach(update -> pump.offer(numbered(update, sequence)));
+        }
+
         call.setOnCancelHandler(() -> close(subscription.get()));
+    }
+
+    /**
+     * Sends the steps this watcher has not seen.
+     *
+     * <p>The cursor counts step history entries, which are append-only and
+     * ordered, so "I have seen the first N" means the same thing on any replica —
+     * unlike a stream's sequence number, which belongs to one stream (§30.2).
+     *
+     * <p>What comes back is what was recorded: finished steps. A step's
+     * <em>start</em> is a live notice and leaves no row, and tokens are not
+     * stored at all — a model's answer lives in one variable once the step ends,
+     * and keeping the characters too would be the same data twice. So a replayed
+     * stream tells a client what happened, not everything it would have seen.
+     *
+     * <p>An update replayed here may also arrive live, because the window
+     * between reading and subscribing belongs to both. A duplicate is better
+     * than a gap, and a client can tell them apart by step id.
+     */
+    private static ExecutionUpdate numbered(ExecutionUpdate update, AtomicLong sequence) {
+        return update.toBuilder().setSequence(sequence.incrementAndGet()).build();
+    }
+
+    private void replay(
+            ExecutionId executionId, long cursor, AtomicLong sequence,
+            Consumer<ExecutionUpdate> send) {
+        List<StepRecord> history = scoped().historyOf(executionId);
+
+        for (int index = (int) Math.min(cursor, history.size()); index < history.size(); index++) {
+            StepRecord step = history.get(index);
+            send.accept(ExecutionUpdate.newBuilder()
+                    .setSequence(sequence.incrementAndGet())
+                    .setAt(WireTypes.toWire(step.finishedAtEpochMillis()))
+                    .setStepFinished(StepFinished.newBuilder()
+                            .setStepId(step.stepId().value())
+                            .setStepType(step.stepType().name())
+                            .setOutcome(WireTypes.toWire(step.outcome()))
+                            .setLatencyMs(step.latencyMillis())
+                            .build())
+                    .build());
+        }
     }
 
     /**

@@ -260,6 +260,7 @@ class PipeMesh:
         *,
         tokens: bool = True,
         progress: bool = True,
+        from_step: int = 0,
     ) -> Iterator[Update]:
         """Return what happens to an execution, until it ends.
 
@@ -279,6 +280,15 @@ class PipeMesh:
         — a stream that could omit ``finished`` would leave a caller waiting for
         something already over. Declining leaves gaps in ``sequence``, which is
         how filtering stays distinguishable from loss.
+
+        Pass ``from_step`` to pick up where a dropped connection left off: it is
+        how many step history entries you have already seen. A count rather than
+        a sequence number, because a sequence belongs to one stream while step
+        history is durable and ordered, so "the first N" means the same thing
+        whichever replica answers.
+
+        Tokens are not replayed — they are never stored. A resumed stream tells
+        you what happened, not everything you would have seen.
         """
         exclude = []
         if not tokens:
@@ -286,7 +296,8 @@ class PipeMesh:
         if not progress:
             exclude.append(pb.UPDATE_KIND_PROGRESS)
 
-        request = pb.WatchExecutionRequest(execution_id=execution_id, exclude=exclude)
+        request = pb.WatchExecutionRequest(
+            execution_id=execution_id, exclude=exclude, from_step=from_step)
         try:
             stream = self._stub.WatchExecution(request)
             first = next(stream)

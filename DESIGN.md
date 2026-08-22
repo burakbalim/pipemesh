@@ -1997,6 +1997,37 @@ done. And its payload is limited, so an update too large to carry is replaced by
 something happened, rather than dropped: the watcher loses the detail and does not lose the
 event.
 
+## 30.3 Picking a stream back up
+
+`WatchExecutionRequest.from_sequence` sat in the proto unimplemented, and its own javadoc said
+why: replaying means storing updates and deciding how long to keep them, which is a decision
+worth making rather than a side effect of adding a stream.
+
+The decision, made: **most of it is already stored.** Step history is durable, ordered and
+append-only (§15) — the events a watcher missed are rows that already exist. So replay reads
+history rather than a second copy of the same facts.
+
+**The cursor counts history entries, not stream events.** §30.2 made the sequence a property of
+one stream, so "resume from event 7" means nothing to a different replica. "I have seen the first
+N steps" means the same thing everywhere, and needs no schema change: a position in an ordered,
+append-only list is as stable as an identifier and reveals less.
+
+**Tokens are not replayed**, and that is said rather than left to be discovered. They are not
+stored: a model's answer lives in one variable once the step ends, and keeping the characters as
+well would be the same data twice. A resumed stream tells a client what happened, not everything
+it would have seen. Half a guarantee stated beats a quietly incomplete one.
+
+**The subscription opens before the history is read.** Reading first loses everything that
+happens in between — the loss the arrival snapshot exists to prevent (§26.4). Live updates that
+arrive during the read are held and released after it, so the past never arrives after the
+present. An update can appear both replayed and live, because that window belongs to both; a
+duplicate is better than a gap, and a step id tells them apart.
+
+**Numbering belongs to the stream, and only to it.** A watcher's counter starts at its own
+arrival snapshot, runs through replay, and continues into live updates. Sharing one counter
+across every watcher of an execution would hand a late joiner numbers that start halfway through,
+and a replaying one numbers that go backwards.
+
 **Whether an organization may watch at all is a deployment's decision**, expressed as a
 permission the caller either holds or does not (§23). No new mechanism: the same permission set
 `CapabilityInvoker` already reads, with a second reader. It is off by default, because demanding

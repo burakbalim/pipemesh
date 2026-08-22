@@ -102,6 +102,16 @@ export interface WatchOptions {
   tokens?: boolean;
   /** `stepStarted`, which roughly doubles the number of updates. Defaults to on. */
   progress?: boolean;
+  /**
+   * How many step history entries you have already seen; everything after them
+   * is replayed before the live stream begins.
+   *
+   * A count rather than a sequence number: a sequence belongs to one stream,
+   * while step history is durable and ordered, so "the first N" means the same
+   * thing whichever replica answers. Tokens are not replayed — they are never
+   * stored.
+   */
+  fromStep?: number;
 }
 
 /**
@@ -256,7 +266,7 @@ export class PipeMesh {
     if (options.tokens === false) exclude.push("UPDATE_KIND_TOKEN");
     if (options.progress === false) exclude.push("UPDATE_KIND_PROGRESS");
 
-    return streamOf(this.serverStream(executionId, exclude));
+    return streamOf(this.serverStream(executionId, exclude, options.fromStep ?? 0));
   }
 
   close(): void {
@@ -266,9 +276,14 @@ export class PipeMesh {
   private serverStream(
     executionId: string,
     exclude: string[],
+    fromStep: number,
   ): grpc.ClientReadableStream<unknown> {
     const method = (this.client as unknown as Record<string, Function>).WatchExecution;
-    return method.call(this.client, { executionId, exclude }) as grpc.ClientReadableStream<unknown>;
+    return method.call(this.client, {
+      executionId,
+      exclude,
+      fromStep,
+    }) as grpc.ClientReadableStream<unknown>;
   }
 
   private unary<T>(method: string, request: unknown, map: (reply: any) => T): Promise<T> {

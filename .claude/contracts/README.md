@@ -40,7 +40,7 @@ onunla çelişmez.
 | 23 | [billing-and-payment.md](billing-and-payment.md) | Ödeme SPI'si, abonelik durumu, plan değişimi; on-prem'de yok | Aşama 1-3 tamam |
 | 24 | [backlog-metrics.md](backlog-metrics.md) | §22.1 — bekleyen işin yaşı, dispatcher ölçekleme sinyali | **Tamam** (2026-08-22) |
 | 25 | [release-and-versioning.md](release-and-versioning.md) | §26.1 — sürüm numarasının vaadi, image ve SDK yayını | **Tamam** (2026-08-22) |
-| 26 | [update-replay.md](update-replay.md) | §30.1 — dayanıklı imleç, kaçırılan olayların kurtarılması | Draft |
+| 26 | [update-replay.md](update-replay.md) | §30.3 — dayanıklı imleç, kaçırılan olayların kurtarılması | **Tamam** (2026-08-22) |
 
 Faz eşlemesi için DESIGN.md §45'e bakın: #1 Phase 1'i, #2–4 Phase 2'yi, #6–7 Phase 3'ü,
 #9–11 Phase 4'ü karşılar. #12 fazlardan bağımsız — #1 tamamlanır tamamlanmaz başlayabilir.

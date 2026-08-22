@@ -104,13 +104,29 @@ message GetExecutionRequest {
 message WatchExecutionRequest {
   string execution_id = 1;
 
-  // Replay from a point already seen, so a dropped connection does not lose
-  // what happened while it was down.
-  uint64 from_sequence = 2;
+  // Never implemented, and now superseded by from_step. Kept rather than
+  // reserved: removing a field is a breaking change, and the compatibility
+  // check is right to say so even about a field nobody could have used. A
+  // number that was published stays published.
+  uint64 from_sequence = 2 [deprecated = true];
 
   // What this watcher wants. Empty means everything — an unset field is zero in
   // proto3, and the other reading would silently mute every existing client.
   repeated UpdateKind exclude = 3;
+
+  // How many step history entries this watcher has already seen. Everything
+  // after them is replayed before the live stream begins.
+  //
+  // A count rather than a sequence number, because §30.2 made the sequence a
+  // property of one stream: whichever replica serves a watcher numbers what it
+  // sends, so "from event 7" means nothing to a different replica. Step history
+  // is append-only, ordered and durable, so "I have seen the first N" means the
+  // same thing everywhere.
+  //
+  // Tokens are not replayed. They are not stored — a model's answer lives in one
+  // variable once the step ends, and keeping the characters as well would be the
+  // same data twice.
+  uint64 from_step = 4;
 }
 
 // Groups of updates a watcher can decline. Deliberately coarse: a filter with

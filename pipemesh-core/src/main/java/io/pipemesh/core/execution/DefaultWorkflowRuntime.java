@@ -14,6 +14,7 @@ import io.pipemesh.core.workflow.WorkflowRegistry;
 
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -209,6 +210,18 @@ public final class DefaultWorkflowRuntime implements WorkflowRuntime {
 
     private ExecutionHandle handleOf(ExecutionRecord record) {
         return new ExecutionHandle(record.executionId(), record.status(), record.currentStep());
+    }
+
+    /**
+     * Every step an execution has run, oldest first.
+     *
+     * <p>Not on {@link WorkflowRuntime}: this is a read of durable detail rather
+     * than part of driving an execution, and it is what replay is built on
+     * (§30.1). Append-only and ordered, so a position in it is a cursor any
+     * replica agrees about.
+     */
+    public List<io.pipemesh.core.state.StepRecord> historyOf(ExecutionId executionId) {
+        return stateStore.historyOf(executionId);
     }
 
     private ExecutionSnapshot snapshotOf(ExecutionRecord record) {

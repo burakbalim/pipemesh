@@ -1,6 +1,6 @@
 # Update Replay
 
-**Status:** Draft
+**Status:** Tamam (2026-08-22)
 **Created:** 2026-08-22
 **DESIGN.md kapsamı:** §30.1 (izleme), §30.2 (süreçler arası), §15 (adım geçmişi)
 
@@ -70,15 +70,15 @@ istemci adım kimliğiyle ayıklayabilir; bu açıkça yazılmalı.
 
 ## Acceptance Criteria
 
-- [ ] İmleç dayanıklı bir şeye bağlı; iki replika aynı imleci aynı şekilde yorumluyor
-- [ ] Eski `from_sequence` alanı `reserved`; sessizce anlam değiştirmiyor
-- [ ] İmleçsiz izleme bugünkü davranışı birebir koruyor
-- [ ] İmleçli izleme, düşen istemcinin kaçırdığı adım olaylarını veriyor
-- [ ] Token'lar yeniden oynatılmıyor ve bu istemciye bildiriliyor
-- [ ] Abonelik geçmiş okunmadan **önce** açılıyor
-- [ ] Geçmiş ile canlının kesiştiği yerde tekrar olabiliyor, kayıp olamıyor
-- [ ] Bitmiş bir execution'ın tam geçmişi okunabiliyor, akış sonra kapanıyor
-- [ ] Python ve TypeScript SDK'ları imleci veriyor ve yeniden bağlanmayı örnekliyor
+- [x] İmleç dayanıklı bir şeye bağlı; iki replika aynı imleci aynı şekilde yorumluyor
+- [x] Eski `from_sequence` alanı yerinde ve `deprecated`; sessizce anlam değiştirmiyor
+- [x] İmleçsiz izleme bugünkü davranışı birebir koruyor
+- [x] İmleçli izleme, düşen istemcinin kaçırdığı adım olaylarını veriyor
+- [x] Token'lar yeniden oynatılmıyor ve bu istemciye bildiriliyor
+- [x] Abonelik geçmiş okunmadan **önce** açılıyor
+- [x] Geçmiş ile canlının kesiştiği yerde tekrar olabiliyor, kayıp olamıyor
+- [x] Bitmiş bir execution'ın tam geçmişi okunabiliyor, akış sonra kapanıyor
+- [x] Python ve TypeScript SDK'ları imleci veriyor ve yeniden bağlanmayı örnekliyor
 
 ## Kapsam dışı
 
@@ -90,8 +90,105 @@ istemci adım kimliğiyle ayıklayabilir; bu açıkça yazılmalı.
 
 ## Split Decision
 
-_To be filled by Agent 0_
+**Decision:** single-prompt, üç aşama
+**Tarih:** 2026-08-22
+
+1. **İmleç** — `StateStore.historyOf` arayüze çıkıyor ve imlecin ne olduğu tanımlanıyor.
+2. **Yeniden oynatma** — abonelik → geçmiş → canlı sırası, ve token'ların dışarıda kaldığının
+   söylenmesi.
+3. **SDK'lar** — Python ve TypeScript'te imleç ve yeniden bağlanma örneği.
+
+### İmleç bir sayı: kaç geçmiş kaydı görüldü
+
+Adım geçmişi **ekleme-yalnızca ve sıralı**. Dolayısıyla "ilk N kaydı gördüm" cümlesi kalıcı,
+global ve replikadan bağımsız — §30.2'nin akış-yerel sıra numarasının olamadığı her şey.
+
+Şema değişmiyor, `StepRecord`'a alan eklenmiyor. `workflow_step_history` zaten `BIGSERIAL`
+taşıyor ama onu dışarı vermek gerekmiyor: sıralı bir listede konum, kayıt kimliği kadar
+kararlı ve daha az şey açıyor.
+
+### Contract'ta bir düzeltme: `from_sequence` **reserved olmuyor**, deprecated oluyor
+
+Contract "eski alan `reserved`" diyordu. Bu, #25'te yeni yazdığım uyumluluk kontrolünün tam
+olarak yakalayacağı şey — ve doğru yakalar, çünkü alan kaldırmak kırıcı bir değişiklik.
+
+Alanın hiç uygulanmamış olması onu kaldırmayı "güvenli" yapıyor gibi görünüyor, ama kontrol bunu
+bilemez ve **ilk gününde kontrolü atlamayı öğrenmek** yanlış refleks. Alan yerinde kalıyor,
+`[deprecated = true]` işaretleniyor, yenisi ekleniyor. Daha küçük ve daha dürüst hamle.
+
+### Kapsam dışı (ek)
+
+- **Geçmişten `token` üretmeye çalışmak.** Yok; uydurmak, olmamış bir şeyi olmuş göstermek olur.
+
+### Risk points
+
+- **Sıra: abonelik geçmişten önce.** Önce okuyup sonra abone olmak, aradaki her şeyi kaybeder.
+  #12 aynı kararı sequence 0 çerçevesi için vermişti; burada tekrar edilmezse aynı hata
+  tekrarlanır.
+- **Kesişimde tekrar.** Geçmiş ile canlının örtüştüğü yerde bir olay iki kez görünebilir. Tekrar
+  kayıptan iyi — ama **yazılmalı**, yoksa istemci onu bir hata sanar.
+- **Geçmişin belleğe sığması.** Uzun bir execution'ın geçmişi büyük olabilir; imleçten sonrası
+  parça parça gönderilmeli, hepsi bir listeye toplanıp değil.
+- **Bitmiş execution'da akışın kapanması.** #22'de düzeltilen kusur burada geri gelebilir:
+  geçmiş gönderildikten sonra terminal bir execution'ın akışı kapanmalı, canlıyı beklememeli.
+- **Token'ın sessizce eksik kalması.** İstemciye söylenmezse, akışın eksik olduğunu ancak
+  kullanıcı fark eder.
 
 ## Implementation Notes
 
-_To be filled as work progresses_
+**Tamamlandı:** 2026-08-22 — 5 yeni test; toplam 470 Java + 37 Python + 25 TypeScript.
+
+### Yeni tablo gerekmedi
+
+Contract'ın tahmini doğru çıktı: adım geçmişi zaten o olaylar. Yeniden oynatma
+`workflow_step_history`'yi okuyor, ikinci bir kopya tutmuyor. `StateStore.historyOf` arayüze
+çıktı (iki implementasyonda zaten vardı).
+
+### İmleç sayı, kimlik değil
+
+`workflow_step_history` `BIGSERIAL` taşıyor ama dışarı verilmedi: sıralı, ekleme-yalnızca bir
+listede **konum** kayıt kimliği kadar kararlı ve daha az şey açıyor. `StepRecord` değişmedi,
+şema değişmedi.
+
+### `from_sequence` reserved değil, deprecated
+
+Contract "reserved" diyordu. Bu, #25'te bir gün önce yazdığım uyumluluk kontrolünün yakalayacağı
+şeydi — ve doğru yakalar. Alanın hiç uygulanmamış olması kaldırmayı güvenli gösteriyor ama kontrol
+bunu bilemez, ve **ilk gününde kontrolü atlamayı öğrenmek** yanlış refleks. Alan yerinde,
+`[deprecated = true]`, yenisi `from_step = 4`.
+
+### Kontrol kendi kör noktasını buldu
+
+`[deprecated = true]` eklenince uyumluluk testi düştü: alan regex'i seçenek ekini kabul etmiyordu
+ve alanı "kaldırılmış" sanıyordu. Bir gün önce yazılan kontrol, ilk gerçek kullanımında kendi
+eksiğini gösterdi. Regex düzeltildi ve nedeni orada yazılı.
+
+### Sayaç akışın sahibinde
+
+Asıl kusur buydu ve test yakaladı: yeniden oynatılanlar 1,2 diye numaralanıyor, sonra canlı yine
+1'den başlıyordu — akış içinde monotonik değil.
+
+Sayaç broker'dan **servise** taşındı. Broker artık numarasız teslim ediyor; numarayı akışa hizmet
+veren taraf veriyor. Bu §30.2'nin cümlesinin ("sıra numarası akışın özelliği") kodda karşılığı, ve
+önceden var olan bir tuhaflığı da düzeltti: aynı execution'ı izleyen ikinci bir client, ilkinin
+saydığı yerden numara alıyordu.
+
+### Sıra: abonelik, sonra geçmiş, sonra canlı
+
+Önce okuyup sonra abone olmak aradaki her şeyi kaybederdi (#12'nin sequence 0 kararı). Ama abone
+olup sonra okumak da yeterli değil: canlı bir olay, ondan eski bir geçmiş kaydından **önce**
+yazılabilirdi. Çözüm, okuma sürerken geleni tutup sonra salıvermek — on satır, ve sıra korunuyor.
+
+### Görünen davranış değişikliği
+
+İmleçsiz bir izleyici artık geçmişi de alıyor (`from_step` yok = "hiçbir şey görmedim"). Mevcut
+iki test bunu gösterdi ve beklentileri güncellendi. #20'nin "boş filtre = hepsi" kararıyla
+tutarlı, ve #22'nin demo ekranı tam olarak bunu istiyor: sonradan bağlanan biri neyin olduğunu
+görsün.
+
+### Devralınacak
+
+- **Geçmişin saklama süresi.** Bu contract var olanı okuyor; adım geçmişinin ne kadar tutulacağı
+  ayrı bir karar.
+- **İstemci tarafında otomatik yeniden bağlanma.** SDK imleci veriyor; ne zaman yeniden
+  bağlanılacağı uygulamanın kararı.

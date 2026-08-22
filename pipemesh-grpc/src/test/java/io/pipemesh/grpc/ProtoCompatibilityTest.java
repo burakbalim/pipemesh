@@ -31,8 +31,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ProtoCompatibilityTest {
 
     private static final Pattern MESSAGE = Pattern.compile("^\\s*message\\s+(\\w+)\\s*\\{");
-    private static final Pattern FIELD =
-            Pattern.compile("^\\s*(?:repeated\\s+)?([\\w.]+)\\s+(\\w+)\\s*=\\s*(\\d+)\\s*;");
+    /**
+     * A field, with or without options.
+     *
+     * <p>The optional {@code [...]} matters: without it a field carrying
+     * {@code [deprecated = true]} reads as missing, and the check reports a
+     * removal that did not happen. It found that about itself the first time a
+     * field was deprecated.
+     */
+    private static final Pattern FIELD = Pattern.compile(
+            "^\\s*(?:repeated\\s+)?([\\w.]+)\\s+(\\w+)\\s*=\\s*(\\d+)\\s*(?:\\[[^]]*])?\\s*;");
     private static final Pattern RESERVED = Pattern.compile("^\\s*reserved\\s+(.+);");
     private static final Pattern CLOSE = Pattern.compile("^\\s*}");
 

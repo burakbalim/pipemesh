@@ -24,7 +24,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
@@ -59,7 +58,6 @@ public final class ExecutionUpdateBroker implements ExecutionObserver, AutoClose
     }
 
     private final Map<ExecutionId, List<Watcher>> watchers = new ConcurrentHashMap<>();
-    private final Map<ExecutionId, AtomicLong> sequences = new ConcurrentHashMap<>();
     private final UpdateChannel channel;
     private final AutoCloseable subscription;
 
@@ -110,7 +108,6 @@ public final class ExecutionUpdateBroker implements ExecutionObserver, AutoClose
                 subscribers.remove(watcher);
                 if (subscribers.isEmpty()) {
                     watchers.remove(executionId);
-                    sequences.remove(executionId);
                 }
             }
         };
@@ -201,12 +198,17 @@ public final class ExecutionUpdateBroker implements ExecutionObserver, AutoClose
     }
 
     /**
-     * Hands an update to this process's own watchers, numbering it as it goes.
+     * Hands an update to this process's own watchers, unnumbered.
      *
-     * <p>The number comes from here rather than from whoever produced the update,
-     * because a sequence describes one stream. Numbered before filtering, so a
-     * filtered watcher sees gaps — and a gap says "not for you", which is what
-     * tells filtering apart from loss.
+     * <p>Numbering belongs to whoever serves a stream, not here. A sequence
+     * describes one stream (§30.2), and a watcher's stream may begin with
+     * replayed history — a counter shared by every watcher of an execution would
+     * hand the second one numbers that start halfway through, and a replaying one
+     * numbers that go backwards.
+     *
+     * <p>Filtering still happens here, before anything is written, so a filtered
+     * watcher sees gaps in whatever numbering it is given — and a gap says "not
+     * for you", which is what tells filtering apart from loss.
      */
     private void toLocalWatchers(ExecutionId executionId, ExecutionUpdate update) {
         List<Watcher> subscribers = watchers.get(executionId);
@@ -215,14 +217,9 @@ public final class ExecutionUpdateBroker implements ExecutionObserver, AutoClose
         }
 
         UpdateKind kind = kindOf(update);
-        ExecutionUpdate numbered = update.toBuilder()
-                .setSequence(sequences.computeIfAbsent(executionId, id -> new AtomicLong())
-                        .incrementAndGet())
-                .build();
-
         subscribers.stream()
                 .filter(subscriber -> subscriber.wants(kind))
-                .forEach(subscriber -> subscriber.onUpdate().accept(numbered));
+                .forEach(subscriber -> subscriber.onUpdate().accept(update));
     }
 
     /**
