@@ -178,7 +178,13 @@ def test_a_watcher_can_decline_progress(mesh: PipeMesh):
     assert kinds[-1] == "finished", "status is not something a watcher can turn off"
 
 
-def test_declining_leaves_gaps_rather_than_renumbering(mesh: PipeMesh):
+def test_a_declining_watcher_still_gets_an_unbroken_stream(mesh: PipeMesh):
+    """What a watcher declined is never numbered, so its stream has no holes.
+
+    Stronger than the gaps this used to assert. Since the sequence is assigned
+    by whoever serves the stream, after filtering, a gap now means something was
+    lost and nothing else.
+    """
     waiting = _expensive(mesh)
     updates = mesh.watch(waiting.execution_id, progress=False)
 
@@ -186,4 +192,27 @@ def test_declining_leaves_gaps_rather_than_renumbering(mesh: PipeMesh):
 
     sequences = [update.sequence for update in updates]
 
-    assert sequences == [0, 1, 2, 4, 5], "a gap says 'not for you', not 'lost'"
+    assert sequences == list(range(len(sequences))), sequences
+
+
+def test_an_event_wakes_a_waiting_execution(mesh):
+    handle = mesh.execute("shipping", {"order": "A-4172"})
+    assert handle.status is ExecutionStatus.WAITING
+
+    moved = mesh.publish("payment_completed", "A-4172", {"amount": 90})
+
+    assert moved == [handle.execution_id]
+    snapshot = mesh.get(handle.execution_id)
+    assert snapshot.status is ExecutionStatus.COMPLETED
+    assert snapshot.variables["payment"]["amount"] == 90
+
+
+def test_an_event_nobody_awaits_is_an_answer_not_an_error(mesh):
+    assert mesh.publish("payment_completed", "no-such-order", {}) == []
+
+
+def test_the_wrong_correlation_wakes_nobody(mesh):
+    handle = mesh.execute("shipping", {"order": "A-4172"})
+
+    assert mesh.publish("payment_completed", "B-9999", {}) == []
+    assert mesh.get(handle.execution_id).status is ExecutionStatus.WAITING

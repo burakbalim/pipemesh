@@ -40,6 +40,12 @@ service PipeMesh {
   // The same execution, observed as it happens. The SDK's stream(); this is not
   // a third execution model, it is a view of one that is already running (§30).
   rpc WatchExecution (WatchExecutionRequest) returns (stream ExecutionUpdate);
+
+  // Wakes whatever is waiting for this event (§9.7). An approval knows which
+  // execution it belongs to; an event does not — a payment service knows an
+  // order number and nothing about executions — so the match is made on a key
+  // recorded when the execution suspended.
+  rpc PublishEvent (PublishEventRequest) returns (PublishEventResponse);
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +147,28 @@ enum UpdateKind {
   // step.started — progress while a step runs, at the cost of roughly doubling
   // the number of updates.
   UPDATE_KIND_PROGRESS = 2;
+}
+
+message PublishEventRequest {
+  // What happened, and which one of it. Together with the caller's organization
+  // these are the key a waiting execution filed itself under.
+  string name = 1;
+  string correlation = 2;
+
+  google.protobuf.Struct payload = 3;
+
+  // Which organization this event belongs to — and read only when nobody
+  // authenticated the caller. The resolved principal always wins, exactly as it
+  // does on StartExecution: a deployment that identifies people is never told
+  // its tenants by the request, and one that identifies nobody has no isolation
+  // for a field to undermine (§22.2).
+  string organization_id = 4;
+}
+
+message PublishEventResponse {
+  // Everything this event moved. Empty is an answer, not an error: an event
+  // nobody was waiting for is dropped (§9.7).
+  repeated string execution_ids = 1;
 }
 
 message ExecutionHandle {

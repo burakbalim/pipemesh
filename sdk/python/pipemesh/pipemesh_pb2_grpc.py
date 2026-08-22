@@ -63,6 +63,11 @@ class PipeMeshStub:
                 request_serializer=pipemesh__pb2.WatchExecutionRequest.SerializeToString,
                 response_deserializer=pipemesh__pb2.ExecutionUpdate.FromString,
                 _registered_method=True)
+        self.PublishEvent = channel.unary_unary(
+                '/pipemesh.v1.PipeMesh/PublishEvent',
+                request_serializer=pipemesh__pb2.PublishEventRequest.SerializeToString,
+                response_deserializer=pipemesh__pb2.PublishEventResponse.FromString,
+                _registered_method=True)
 
 
 class PipeMeshServicer:
@@ -110,6 +115,16 @@ class PipeMeshServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def PublishEvent(self, request, context):
+        """Wakes whatever is waiting for this event (§9.7). An approval knows which
+        execution it belongs to; an event does not — a payment service knows an
+        order number and nothing about executions — so the match is made on a key
+        recorded when the execution suspended.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PipeMeshServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -137,6 +152,11 @@ def add_PipeMeshServicer_to_server(servicer, server):
                     servicer.WatchExecution,
                     request_deserializer=pipemesh__pb2.WatchExecutionRequest.FromString,
                     response_serializer=pipemesh__pb2.ExecutionUpdate.SerializeToString,
+            ),
+            'PublishEvent': grpc.unary_unary_rpc_method_handler(
+                    servicer.PublishEvent,
+                    request_deserializer=pipemesh__pb2.PublishEventRequest.FromString,
+                    response_serializer=pipemesh__pb2.PublishEventResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -278,6 +298,33 @@ class PipeMesh:
             '/pipemesh.v1.PipeMesh/WatchExecution',
             pipemesh__pb2.WatchExecutionRequest.SerializeToString,
             pipemesh__pb2.ExecutionUpdate.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PublishEvent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pipemesh.v1.PipeMesh/PublishEvent',
+            pipemesh__pb2.PublishEventRequest.SerializeToString,
+            pipemesh__pb2.PublishEventResponse.FromString,
             options,
             channel_credentials,
             insecure,

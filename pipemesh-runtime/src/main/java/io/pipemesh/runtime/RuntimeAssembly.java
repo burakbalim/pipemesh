@@ -3,6 +3,7 @@ package io.pipemesh.runtime;
 import io.pipemesh.core.capability.CapabilityInvoker;
 import io.pipemesh.core.capability.CapabilityProvider;
 import io.pipemesh.core.capability.CapabilityRegistry;
+import io.pipemesh.core.event.EventPublisher;
 import io.pipemesh.core.config.ConfigRepository;
 import io.pipemesh.core.dispatch.ExecutionDispatcher;
 import io.pipemesh.core.dispatch.ExecutionLeases;
@@ -38,6 +39,7 @@ import io.pipemesh.core.workflow.InMemoryWorkflowRegistry;
 import io.pipemesh.core.workflow.WorkflowCompiler;
 import io.pipemesh.grpc.ExecutionUpdateBroker;
 import io.pipemesh.grpc.PipeMeshServer;
+import io.pipemesh.grpc.PrincipalResolver;
 import io.pipemesh.grpc.WorkerCapabilityProvider;
 import io.pipemesh.grpc.WorkerRegistry;
 import io.pipemesh.openai.OpenAiCompatibleProviderFactory;
@@ -164,11 +166,16 @@ public final class RuntimeAssembly implements AutoCloseable {
         // thing that needs a code change.
         IntentResolver intents = new DefaultIntentResolver(config.intents(), models, prompts);
 
+        DefaultWorkflowRuntime workflowRuntime = new DefaultWorkflowRuntime(
+                workflows, stateStore, executor, intents,
+                settings.startsInline() ? StartMode.INLINE : StartMode.DISPATCHED);
+
         this.server = new PipeMeshServer(
-                new DefaultWorkflowRuntime(
-                        workflows, stateStore, executor, intents,
-                        settings.startsInline() ? StartMode.INLINE : StartMode.DISPATCHED),
-                broker, settings.port(), null, workers);
+                workflowRuntime, broker, settings.port(), null, workers,
+                PrincipalResolver.ANONYMOUS, List.of(), List.of(),
+                // Waiting was already built; this is what lets an application on
+                // the other side of the wire wake it (§9.7).
+                new EventPublisher(waits, workflowRuntime), List.of());
     }
 
     public RuntimeAssembly start() throws IOException {

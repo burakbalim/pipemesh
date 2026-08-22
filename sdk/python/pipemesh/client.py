@@ -254,6 +254,30 @@ class PipeMesh:
             variables=json_format.MessageToDict(snapshot.variables),
         )
 
+    def publish(
+        self,
+        name: str,
+        correlation: str,
+        payload: Optional[Mapping[str, Any]] = None,
+    ) -> list[str]:
+        """Wake whatever is waiting for this event.
+
+        An approval knows which execution it belongs to; an event does not — a
+        payment service knows an order number and nothing about executions. The
+        match is made on the key the execution filed itself under when it
+        suspended: this name, this correlation, and your organization.
+
+        Returns the executions this moved. An empty list is an answer rather
+        than an error: an event nobody was waiting for is dropped.
+        """
+        reply = self._call(self._stub.PublishEvent, pb.PublishEventRequest(
+            name=name,
+            correlation=correlation,
+            payload=_to_struct(payload),
+            organization_id=self._organization))
+
+        return list(reply.execution_ids)
+
     def watch(
         self,
         execution_id: str,

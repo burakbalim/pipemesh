@@ -1,0 +1,94 @@
+{
+  "id": "vendor_selection",
+  "version": "1.0",
+  "entry": "understand",
+
+  "budget": { "maxModelCalls": 12, "maxTokens": 120000 },
+
+  "steps": [
+    {
+      "id": "understand",
+      "type": "llm",
+      "model": "fast",
+      "prompt": "procurement.extract.v1",
+      "outputSchema": "purchase-request",
+      "output": "request",
+      "next": "gather"
+    },
+
+    {
+      "id": "gather",
+      "type": "parallel",
+      "branches": ["find_vendors", "check_budget"],
+      "join": "propose"
+    },
+
+    {
+      "id": "find_vendors",
+      "type": "capability",
+      "capability": "vendor_search",
+      "input": "$.request",
+      "output": "vendors",
+      "next": "propose",
+      "retry": { "maxAttempts": 3, "initialDelay": "500ms" }
+    },
+
+    {
+      "id": "check_budget",
+      "type": "capability",
+      "capability": "budget_remaining",
+      "input": "$.request",
+      "output": "budget",
+      "next": "propose"
+    },
+
+    {
+      "id": "propose",
+      "type": "llm",
+      "model": "reasoning",
+      "prompt": "procurement.shortlist.v1",
+      "outputSchema": "vendor-options",
+      "output": "options",
+      "next": "await_choice"
+    },
+
+    {
+      "id": "await_choice",
+      "type": "wait",
+      "event": "vendor_chosen",
+      "correlationKey": "$.request.requestId",
+      "output": "choice",
+      "next": "needs_approval",
+      "timeoutSeconds": 172800,
+      "onTimeout": "abandoned"
+    },
+    { "id": "abandoned", "type": "terminal", "status": "CANCELLED" },
+
+    {
+      "id": "needs_approval",
+      "type": "condition",
+      "expression": "$.choice.amount > 10000",
+      "onTrue": "manager_approval",
+      "onFalse": "place_order"
+    },
+
+    {
+      "id": "manager_approval",
+      "type": "human_approval",
+      "message": "Approve this purchase?",
+      "onApproved": "place_order",
+      "onRejected": "declined"
+    },
+    { "id": "declined", "type": "terminal", "status": "CANCELLED" },
+
+    {
+      "id": "place_order",
+      "type": "capability",
+      "capability": "place_order",
+      "input": "$.choice",
+      "output": "order",
+      "next": "ordered"
+    },
+    { "id": "ordered", "type": "terminal", "status": "COMPLETED" }
+  ]
+}

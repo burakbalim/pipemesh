@@ -1,0 +1,11 @@
+{
+  "id": "budget_remaining",
+  "description": "How much is left on this cost centre this quarter",
+  "kind": "application",
+  "owner": "finance",
+  "version": "1.0",
+  "execution": {
+    "type": "worker",
+    "capability": "budget_remaining"
+  }
+}

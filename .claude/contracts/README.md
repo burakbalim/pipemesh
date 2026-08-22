@@ -41,6 +41,7 @@ onunla çelişmez.
 | 24 | [backlog-metrics.md](backlog-metrics.md) | §22.1 — bekleyen işin yaşı, dispatcher ölçekleme sinyali | **Tamam** (2026-08-22) |
 | 25 | [release-and-versioning.md](release-and-versioning.md) | §26.1 — sürüm numarasının vaadi, image ve SDK yayını | **Tamam** (2026-08-22) |
 | 26 | [update-replay.md](update-replay.md) | §30.3 — dayanıklı imleç, kaçırılan olayların kurtarılması | **Tamam** (2026-08-22) |
+| 27 | [remote-events.md](remote-events.md) | §9.7 — olay yayını için RPC; `wait` uzak istemciler için tamamlandı | **Tamam** (2026-08-23) |
 
 Faz eşlemesi için DESIGN.md §45'e bakın: #1 Phase 1'i, #2–4 Phase 2'yi, #6–7 Phase 3'ü,
 #9–11 Phase 4'ü karşılar. #12 fazlardan bağımsız — #1 tamamlanır tamamlanmaz başlayabilir.

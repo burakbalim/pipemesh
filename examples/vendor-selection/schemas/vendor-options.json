@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "vendorId": { "type": "string" },
+          "vendor": { "type": "string" },
+          "amount": { "type": "number" },
+          "leadTimeDays": { "type": "number" },
+          "why": { "type": "string" }
+        },
+        "required": ["vendorId", "vendor", "amount", "leadTimeDays", "why"]
+      }
+    },
+    "recommended": { "type": "string" }
+  },
+  "required": ["options", "recommended"]
+}

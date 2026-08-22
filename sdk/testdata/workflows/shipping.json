@@ -1,0 +1,10 @@
+{
+  "id": "shipping",
+  "version": "1.0",
+  "entry": "await_payment",
+  "steps": [
+    {"id": "await_payment", "type": "wait", "event": "payment_completed",
+     "correlationKey": "$.input.order", "output": "payment", "next": "ship"},
+    {"id": "ship", "type": "terminal", "status": "COMPLETED"}
+  ]
+}

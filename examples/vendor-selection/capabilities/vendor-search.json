@@ -1,0 +1,11 @@
+{
+  "id": "vendor_search",
+  "description": "Find suppliers who can deliver this item",
+  "kind": "application",
+  "owner": "procurement-platform",
+  "version": "1.0",
+  "execution": {
+    "type": "worker",
+    "capability": "vendor_search"
+  }
+}

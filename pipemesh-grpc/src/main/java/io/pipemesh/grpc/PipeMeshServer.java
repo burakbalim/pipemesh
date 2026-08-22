@@ -3,6 +3,7 @@ package io.pipemesh.grpc;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptor;
+import io.pipemesh.core.event.EventPublisher;
 import io.pipemesh.core.execution.RecoveryScheduler;
 import io.pipemesh.core.execution.WorkflowRuntime;
 
@@ -109,6 +110,27 @@ public final class PipeMeshServer implements AutoCloseable {
             List<String> watchPermissions,
             List<ServerInterceptor> interceptors) {
 
+        this(runtime, broker, port, recovery, workers, principals, watchPermissions,
+                interceptors, null, List.of());
+    }
+
+    /**
+     * @param events             wakes executions waiting on an event (§9.7), or
+     *                           {@code null} to serve none
+     * @param publishPermissions what a caller must hold to publish one
+     */
+    public PipeMeshServer(
+            WorkflowRuntime runtime,
+            ExecutionUpdateBroker broker,
+            int port,
+            RecoveryScheduler recovery,
+            WorkerRegistry workers,
+            PrincipalResolver principals,
+            List<String> watchPermissions,
+            List<ServerInterceptor> interceptors,
+            EventPublisher events,
+            List<String> publishPermissions) {
+
         Objects.requireNonNull(runtime, "runtime");
         Objects.requireNonNull(principals, "principal resolver");
         Objects.requireNonNull(broker, "broker");
@@ -118,7 +140,8 @@ public final class PipeMeshServer implements AutoCloseable {
         ServerBuilder<?> builder = ServerBuilder.forPort(port)
                 // Registered last, so it runs first: everything after it can read
                 // the call's metadata, including the deployment's own interceptors.
-                .addService(new PipeMeshService(runtime, broker, principals, watchPermissions));
+                .addService(new PipeMeshService(
+                        runtime, broker, principals, watchPermissions, events, publishPermissions));
         interceptors.forEach(builder::intercept);
         builder.intercept(new CallMetadata());
 

@@ -1,0 +1,12 @@
+{
+  "id": "place_order",
+  "description": "Place the purchase order",
+  "kind": "application",
+  "owner": "procurement-team",
+  "version": "1.0",
+  "idempotent": false,
+  "execution": {
+    "type": "worker",
+    "capability": "place_order"
+  }
+}

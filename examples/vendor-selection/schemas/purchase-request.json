@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "requestId": { "type": "string" },
+    "item": { "type": "string" },
+    "quantity": { "type": "number" },
+    "costCentre": { "type": "string" }
+  },
+  "required": ["requestId", "item", "quantity", "costCentre"]
+}

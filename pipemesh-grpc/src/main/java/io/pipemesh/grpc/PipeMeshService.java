@@ -3,6 +3,8 @@ package io.pipemesh.grpc;
 import io.grpc.Status;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
+import io.pipemesh.core.event.EventKey;
+import io.pipemesh.core.event.EventPublisher;
 import io.pipemesh.core.execution.ExecutionId;
 import io.pipemesh.core.execution.ExecutionInput;
 import io.pipemesh.core.capability.Principal;
@@ -22,6 +24,8 @@ import io.pipemesh.proto.v1.ExecutionStarted;
 import io.pipemesh.proto.v1.ExecutionUpdate;
 import io.pipemesh.proto.v1.GetExecutionRequest;
 import io.pipemesh.proto.v1.PipeMeshGrpc;
+import io.pipemesh.proto.v1.PublishEventRequest;
+import io.pipemesh.proto.v1.PublishEventResponse;
 import io.pipemesh.proto.v1.ProcessMessageRequest;
 import io.pipemesh.proto.v1.StartExecutionRequest;
 import io.pipemesh.proto.v1.StepFinished;
@@ -54,6 +58,8 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
     private final ExecutionUpdateBroker broker;
     private final PrincipalResolver principals;
     private final List<String> watchPermissions;
+    private final EventPublisher events;
+    private final List<String> publishPermissions;
 
     public PipeMeshService(WorkflowRuntime runtime, ExecutionUpdateBroker broker) {
         this(runtime, broker, PrincipalResolver.ANONYMOUS);
@@ -83,6 +89,28 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
             WorkflowRuntime runtime, ExecutionUpdateBroker broker,
             PrincipalResolver principals, List<String> watchPermissions) {
 
+        this(runtime, broker, principals, watchPermissions, null, List.of());
+    }
+
+    /**
+     * @param events             wakes executions waiting on an event (§9.7), or
+     *                           {@code null} for a deployment that serves no
+     *                           events — the RPC then answers UNIMPLEMENTED
+     *                           rather than pretending to have delivered one.
+     * @param publishPermissions what a caller must hold to publish. Empty leaves
+     *                           it open, for the same reason watching is open by
+     *                           default: demanding a permission of callers nobody
+     *                           authenticated would break every single-tenant
+     *                           install to enforce a boundary it does not have.
+     */
+    public PipeMeshService(
+            WorkflowRuntime runtime, ExecutionUpdateBroker broker,
+            PrincipalResolver principals, List<String> watchPermissions,
+            EventPublisher events, List<String> publishPermissions) {
+
+        this.events = events;
+        this.publishPermissions = List.copyOf(
+                Objects.requireNonNull(publishPermissions, "publish permissions"));
         this.watchPermissions = List.copyOf(
                 Objects.requireNonNull(watchPermissions, "watch permissions"));
         this.runtime = Objects.requireNonNull(runtime, "runtime");
@@ -305,6 +333,49 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
                             .build())
                     .build());
         }
+    }
+
+    /**
+     * Wakes whatever was waiting for this event.
+     *
+     * <p>The organization comes from the caller whenever anybody established one.
+     * An event is matched on {@code (organization, name, correlation)}, so a
+     * tenant able to name another's would reach into their executions with one
+     * call — which is why the request's own field is read only where nobody is
+     * identified, the same rule {@code StartExecution} already follows (§22.2).
+     */
+    @Override
+    public void publishEvent(PublishEventRequest request, StreamObserver<PublishEventResponse> response) {
+        if (events == null) {
+            response.onError(Status.UNIMPLEMENTED
+                    .withDescription("this deployment serves no events")
+                    .asRuntimeException());
+            return;
+        }
+
+        Principal caller = caller();
+        if (!caller.missingFrom(publishPermissions).isEmpty()) {
+            response.onError(Status.PERMISSION_DENIED
+                    .withDescription("publishing an event requires " + publishPermissions)
+                    .asRuntimeException());
+            return;
+        }
+
+        answer(response, () -> {
+            EventKey key = new EventKey(
+                    organizationOf(request.getOrganizationId()),
+                    request.getName(),
+                    request.getCorrelation());
+
+            // An empty answer is an answer: an event nobody was waiting for is
+            // dropped, and the caller sees that rather than an error (§9.7).
+            return PublishEventResponse.newBuilder()
+                    .addAllExecutionIds(events.publish(key, JsonStructs.toJson(request.getPayload()))
+                            .stream()
+                            .map(moved -> moved.executionId().value())
+                            .toList())
+                    .build();
+        });
     }
 
     /**

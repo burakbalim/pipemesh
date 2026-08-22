@@ -249,10 +249,27 @@ describe("PipeMesh client", () => {
     assert.equal(kinds.at(-1), "finished", "status cannot be turned off");
   });
 
-  it("leaves gaps rather than renumbering what it filtered", async () => {
+  it("gives a declining watcher an unbroken stream", async () => {
+    // Stronger than the gaps this used to assert: the sequence is assigned by
+    // whoever serves the stream, after filtering, so a gap now means something
+    // was lost and nothing else.
     const sequences = (await watchThenApprove({ progress: false }))
       .map((update) => update.sequence);
 
-    assert.deepEqual(sequences, [0, 1, 2, 4, 5], "a gap says 'not for you', not 'lost'");
+    assert.deepEqual(sequences, sequences.map((_, index) => index));
+  });
+
+  it("publishes an event that wakes a waiting execution", async () => {
+    const waiting = await mesh.execute("shipping", { order: "A-4172" });
+    assert.equal(waiting.status, "WAITING");
+
+    const moved = await mesh.publish("payment_completed", "A-4172", { amount: 90 });
+
+    assert.deepEqual(moved, [waiting.executionId]);
+    assert.equal((await mesh.get(waiting.executionId)).status, "COMPLETED");
+  });
+
+  it("treats an event nobody awaits as an answer, not an error", async () => {
+    assert.deepEqual(await mesh.publish("payment_completed", "no-such-order"), []);
   });
 });

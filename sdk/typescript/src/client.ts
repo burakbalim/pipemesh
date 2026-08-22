@@ -246,6 +246,25 @@ export class PipeMesh {
   }
 
   /**
+   * Wake whatever is waiting for this event.
+   *
+   * An approval knows which execution it belongs to; an event does not — a
+   * payment service knows an order number and nothing about executions. The
+   * match is made on the key the execution filed itself under when it
+   * suspended: this name, this correlation, and your organization.
+   *
+   * Resolves with the executions this moved. An empty array is an answer rather
+   * than an error: an event nobody was waiting for is dropped.
+   */
+  publish(name: string, correlation: string, payload: Record<string, unknown> = {}): Promise<string[]> {
+    return this.unary<string[]>(
+      "PublishEvent",
+      { name, correlation, payload: toStruct(payload), organizationId: this.organization },
+      (reply: any) => (reply.executionIds ?? []) as string[],
+    );
+  }
+
+  /**
    * Yield what happens to an execution, until it ends.
    *
    * The subscription opens when this is called, not when the caller first reads

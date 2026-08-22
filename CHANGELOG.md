@@ -23,6 +23,7 @@ packages together is never required.
 - `WatchExecutionRequest.exclude` and `UpdateKind` — decline tokens or progress (#20)
 - `ExecutionUpdate.step_started`, `ExecutionUpdate.recovered` — progress while a step runs (#20)
 - `WatchExecutionRequest.from_step` — resume a dropped stream (#26)
+- `PublishEvent` — wake an execution waiting on an event, from a remote client (#27)
 - `WatchExecutionRequest.from_sequence` is deprecated; it was never implemented (#26)
 
 ### Added
@@ -32,3 +33,4 @@ packages together is never required.
 - Console: accounts, API keys, plans, quota, and a demo that takes the production path (#19)
 - Payment as an optional provider; absent entirely on an install without one (#23)
 - Backlog age as the signal to scale drivers on (#24)
+- `examples/vendor-selection` — a whole flow: model, capabilities, a choice, an approval
