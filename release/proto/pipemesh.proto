@@ -1,0 +1,281 @@
+// The authoritative API contract (DESIGN.md §26.1).
+//
+// The Java API is one binding of this file, and the gRPC service is a thin
+// adapter over the same core — never a second implementation with its own
+// semantics. When the two disagree, this file is right.
+//
+// Not implemented yet. It is written alongside the runtime so the API cannot
+// drift into a shape that will not serialize: string identifiers, JSON
+// variables, no in-memory handles, no futures.
+
+syntax = "proto3";
+
+package pipemesh.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "io.pipemesh.proto.v1";
+
+// ---------------------------------------------------------------------------
+// Outbound: a caller drives the runtime (§26.4)
+// ---------------------------------------------------------------------------
+
+service PipeMesh {
+  // Runs a named workflow. The SDK's execute().
+  rpc StartExecution (StartExecutionRequest) returns (ExecutionHandle);
+
+  // Resolves intent first, then runs whatever workflow it chose. The SDK's
+  // process(). Intent selects a workflow; it does not run one (§19, §20).
+  rpc ProcessMessage (ProcessMessageRequest) returns (ExecutionHandle);
+
+  // Lets a suspended execution continue. Delivering the same decision twice is
+  // not an error and does not advance the execution twice.
+  rpc SubmitApproval (SubmitApprovalRequest) returns (ExecutionHandle);
+
+  // Where an execution stands, right now.
+  rpc GetExecution (GetExecutionRequest) returns (ExecutionSnapshot);
+
+  // The same execution, observed as it happens. The SDK's stream(); this is not
+  // a third execution model, it is a view of one that is already running (§30).
+  rpc WatchExecution (WatchExecutionRequest) returns (stream ExecutionUpdate);
+}
+
+// ---------------------------------------------------------------------------
+// Inbound: the runtime invokes work that lives in an SDK (§26.1)
+//
+// A worker opens the stream and the runtime pushes invocations down it, so a
+// worker needs no inbound address, certificate or firewall exception.
+// ---------------------------------------------------------------------------
+
+service CapabilityWorker {
+  rpc Connect (stream WorkerMessage) returns (stream CapabilityInvocation);
+}
+
+// ---------------------------------------------------------------------------
+// Messages
+// ---------------------------------------------------------------------------
+
+message StartExecutionRequest {
+  string workflow_id = 1;
+  google.protobuf.Struct input = 2;
+
+  // Which organization this execution belongs to. Every span and metric is
+  // labelled with it (§22.2).
+  string organization_id = 3;
+
+  // A caller already inside a trace passes its W3C traceparent, so the workflow
+  // appears underneath the request that asked for it (§22.3).
+  string traceparent = 4;
+
+  // Reserved for fields the design already anticipates: an idempotency key, a
+  // deadline, a principal, a priority.
+  reserved 5 to 9;
+
+  // Pins the run to one workflow version. Left empty, the newest registered
+  // version is chosen once, at the start, and written to the execution's record
+  // — so a deploy that lands mid-run does not move it (§24).
+  string workflow_version = 10;
+}
+
+message ProcessMessageRequest {
+  string message = 1;
+  google.protobuf.Struct input = 2;
+  string organization_id = 3;
+  string traceparent = 4;
+}
+
+message SubmitApprovalRequest {
+  string execution_id = 1;
+
+  // Identifies the decision, and is what makes a repeated delivery harmless.
+  string approval_id = 2;
+
+  bool approved = 3;
+  string decided_by = 4;
+  string comment = 5;
+}
+
+message GetExecutionRequest {
+  string execution_id = 1;
+}
+
+message WatchExecutionRequest {
+  string execution_id = 1;
+
+  // Replay from a point already seen, so a dropped connection does not lose
+  // what happened while it was down.
+  uint64 from_sequence = 2;
+
+  // What this watcher wants. Empty means everything — an unset field is zero in
+  // proto3, and the other reading would silently mute every existing client.
+  repeated UpdateKind exclude = 3;
+}
+
+// Groups of updates a watcher can decline. Deliberately coarse: a filter with
+// one entry per message type would be a second copy of the oneof to keep in
+// step with it.
+enum UpdateKind {
+  UPDATE_KIND_UNSPECIFIED = 0;
+
+  // Model output as it is produced. The largest part of a stream by far.
+  UPDATE_KIND_TOKEN = 1;
+
+  // step.started — progress while a step runs, at the cost of roughly doubling
+  // the number of updates.
+  UPDATE_KIND_PROGRESS = 2;
+}
+
+message ExecutionHandle {
+  string execution_id = 1;
+  ExecutionStatus status = 2;
+  string current_step_id = 3;
+}
+
+message ExecutionSnapshot {
+  string execution_id = 1;
+  string organization_id = 2;
+  string workflow_id = 3;
+  string workflow_version = 4;
+  ExecutionStatus status = 5;
+  string current_step_id = 6;
+  google.protobuf.Struct variables = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message ExecutionUpdate {
+  uint64 sequence = 1;
+  google.protobuf.Timestamp at = 2;
+
+  oneof update {
+    ExecutionStarted started = 3;
+    StepFinished step_finished = 4;
+    ExecutionSuspended suspended = 5;
+    ExecutionResumed resumed = 6;
+    ExecutionFinished finished = 7;
+    TokenChunk token = 8;
+    StepStarted step_started = 9;
+    ExecutionRecovered recovered = 10;
+  }
+}
+
+// A step about to run (§30). Published before the step is persisted, which is
+// safe because the stored record already stands at this step — unlike anything
+// happening inside a step, which would have no witness after a crash.
+message StepStarted {
+  string step_id = 1;
+  string step_type = 2;
+
+  // Counts from 1. A retry is a real second start rather than one long step.
+  uint32 attempt = 3;
+}
+
+// An execution picked up after the process running it died (§15, §38).
+message ExecutionRecovered {
+  string step_id = 1;
+
+  // Whether the step could be run again. A recovery that stopped for a person is
+  // still a recovery, and is the one worth hearing about.
+  bool repeated = 2;
+  string reason = 3;
+}
+
+message ExecutionStarted {
+  ExecutionSnapshot execution = 1;
+}
+
+message StepFinished {
+  string step_id = 1;
+  string step_type = 2;
+  StepOutcome outcome = 3;
+  int64 latency_ms = 4;
+
+  // Whatever the step reported about its own run — tokens, model, which
+  // capability it reached. Carried without interpretation.
+  google.protobuf.Struct attributes = 5;
+}
+
+message ExecutionSuspended {
+  string step_id = 1;
+  string reason = 2;
+  google.protobuf.Struct detail = 3;
+}
+
+message ExecutionResumed {
+  string step_id = 1;
+  int64 waited_ms = 2;
+}
+
+message ExecutionFinished {
+  ExecutionStatus status = 1;
+  google.protobuf.Struct output = 2;
+}
+
+// A piece of a model's answer, for callers watching a running execution (§30).
+message TokenChunk {
+  string step_id = 1;
+  string text = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Capability worker messages
+// ---------------------------------------------------------------------------
+
+message WorkerMessage {
+  oneof message {
+    WorkerRegistration registration = 1;
+    CapabilityResult result = 2;
+  }
+}
+
+message WorkerRegistration {
+  string organization_id = 1;
+
+  // The capability ids this worker can serve.
+  repeated string capability_ids = 2;
+}
+
+message CapabilityInvocation {
+  string invocation_id = 1;
+  string capability_id = 2;
+  google.protobuf.Struct input = 3;
+  string traceparent = 4;
+}
+
+message CapabilityResult {
+  string invocation_id = 1;
+
+  oneof outcome {
+    google.protobuf.Struct output = 2;
+    CapabilityFailure failure = 3;
+  }
+}
+
+message CapabilityFailure {
+  string code = 1;
+  string message = 2;
+  bool retryable = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_CREATED = 1;
+  EXECUTION_STATUS_RUNNING = 2;
+  EXECUTION_STATUS_WAITING = 3;
+  EXECUTION_STATUS_COMPLETED = 4;
+  EXECUTION_STATUS_FAILED = 5;
+  EXECUTION_STATUS_CANCELLED = 6;
+}
+
+enum StepOutcome {
+  STEP_OUTCOME_UNSPECIFIED = 0;
+  STEP_OUTCOME_SUCCESS = 1;
+  STEP_OUTCOME_FAILED = 2;
+  STEP_OUTCOME_SUSPENDED = 3;
+}
