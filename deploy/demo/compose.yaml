@@ -6,6 +6,11 @@
 #
 # The database is yours. There is no postgres service here on purpose — this
 # stack connects to one, it does not operate one.
+#
+# Two of the four services are reachable from outside, and they are reached
+# through whatever reverse proxy already holds :443 on the host. That proxy's
+# network, and the hostnames, are environment — a compose file that named one
+# deployment's proxy would only work at that deployment.
 
 services:
   # Vendor plumbing: which provider actually serves a model, whose key it uses,
@@ -50,6 +55,19 @@ services:
   # Accounts, keys, plans and quota. The product.
   console:
     image: ghcr.io/burakbalim/pipemesh-console:staging
+    networks: [default, proxy]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${PROXY_NETWORK}
+      traefik.http.routers.pipemesh-console.rule: Host(`${CONSOLE_HOST:?set this in the environment}`)
+      traefik.http.routers.pipemesh-console.entrypoints: http
+      traefik.http.routers.pipemesh-console.middlewares: pipemesh-to-https
+      traefik.http.routers.pipemesh-console-tls.rule: Host(`${CONSOLE_HOST}`)
+      traefik.http.routers.pipemesh-console-tls.entrypoints: https
+      traefik.http.routers.pipemesh-console-tls.tls: "true"
+      traefik.http.routers.pipemesh-console-tls.tls.certresolver: ${CERT_RESOLVER:-letsencrypt}
+      traefik.http.services.pipemesh-console.loadbalancer.server.port: "8090"
+      traefik.http.middlewares.pipemesh-to-https.redirectscheme.scheme: https
     environment:
       CONSOLE_DB_URL: ${PIPEMESH_DB_URL}
       CONSOLE_DB_USER: ${PIPEMESH_DB_USER}
@@ -63,8 +81,6 @@ services:
       # flag, and it should be on before anybody outside can reach this.
       CONSOLE_CLOUD: ${CONSOLE_CLOUD:-false}
       CONSOLE_DEFAULT_PLAN: demo
-    ports:
-      - "8090"
     restart: unless-stopped
 
   # The demo itself: an application that uses PipeMesh, not part of it. It serves
@@ -73,6 +89,18 @@ services:
   demo:
     image: ghcr.io/burakbalim/pipemesh-demo:staging
     depends_on: [runtime]
+    networks: [default, proxy]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${PROXY_NETWORK}
+      traefik.http.routers.pipemesh-demo.rule: Host(`${DEMO_HOST:?set this in the environment}`)
+      traefik.http.routers.pipemesh-demo.entrypoints: http
+      traefik.http.routers.pipemesh-demo.middlewares: pipemesh-to-https
+      traefik.http.routers.pipemesh-demo-tls.rule: Host(`${DEMO_HOST}`)
+      traefik.http.routers.pipemesh-demo-tls.entrypoints: https
+      traefik.http.routers.pipemesh-demo-tls.tls: "true"
+      traefik.http.routers.pipemesh-demo-tls.tls.certresolver: ${CERT_RESOLVER:-letsencrypt}
+      traefik.http.services.pipemesh-demo.loadbalancer.server.port: "8000"
     environment:
       PIPEMESH_TARGET: runtime:8080
       PIPEMESH_ORGANIZATION: demo
@@ -81,6 +109,16 @@ services:
       # The source page claims to show what is running; two copies that could
       # drift would make that claim false the first time they did.
       - ../../examples/vendor-selection:/app/examples/vendor-selection:ro
-    ports:
-      - "8000"
     restart: unless-stopped
+
+networks:
+  # The runtime, the model proxy and the two services talk to each other here,
+  # and nothing on it is reachable from outside.
+  default:
+
+  # The reverse proxy's own network, created by whoever runs it. Named by
+  # environment rather than written down: this stack should come up in front of
+  # any Traefik, not one particular installation's.
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:?set this in the environment}

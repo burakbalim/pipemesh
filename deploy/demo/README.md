@@ -14,6 +14,9 @@ of them should be:
 
 | Variable | What it is |
 |---|---|
+| `PROXY_NETWORK` | the docker network the reverse proxy is already on, so it can reach these containers |
+| `DEMO_HOST`, `CONSOLE_HOST` | the hostnames those two answer on |
+| `CERT_RESOLVER` | the proxy's ACME resolver; defaults to `letsencrypt` |
 | `PIPEMESH_DB_URL` | JDBC URL of the existing PostgreSQL, e.g. `jdbc:postgresql://host:5432/pipemesh` |
 | `PIPEMESH_DB_USER`, `PIPEMESH_DB_PASSWORD` | its credentials |
 | `CONSOLE_BASE_URL` | where the console is reachable, used in verification links |
@@ -25,6 +28,26 @@ The runtime migrates the schema on start, so an empty database is enough.
 `CONSOLE_CLOUD` defaults to `false`, which sends verification links to the log — right while you
 are testing sign-up yourself. Turning it on demands a real mail sender and refuses to start
 without one. Turn it on before anybody outside can reach this.
+
+## Routing
+
+Only `demo` and `console` are reachable from outside. The runtime and the model proxy stay on the
+internal network — the runtime's gRPC port is not a public interface, and a model proxy holding an
+upstream key certainly is not.
+
+The labels assume a Traefik with `http` and `https` entrypoints and an ACME resolver, which is
+what almost every one-host setup already has. Both services get an HTTP router that redirects to
+HTTPS and an HTTPS router with TLS; nothing about them is specific to one installation, which is
+why the network name and the hostnames come from the environment.
+
+A DNS-01 resolver issues certificates without the host being reachable on port 80 — worth knowing
+if the names sit behind a CDN.
+
+**The demo's live view is a long-lived SSE stream.** Anything in front of it that buffers
+responses will hold the whole stream until the execution ends, which is the one failure that
+makes the page look broken rather than slow. The application already sends `Cache-Control:
+no-cache` and `X-Accel-Buffering: no`; if the execution panel still fills in all at once instead
+of line by line, that is what to look at.
 
 ## Bringing it up
 
