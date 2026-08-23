@@ -266,6 +266,24 @@ tutuyor, tarayıcılar ona bağlanıp kopuyor. Bu bir demo kısayolu değil, bir
 izleyen uygulamanın olağan şekli — ama ikinci bir doğruluk kaynağı olmamalı: hiçbir şey burada
 otoriter değil, "gerçekte ne oluyor" sorusunun cevabı hâlâ `mesh.get`.
 
+### Sunucu hazırdı, sayfa bağlanmamıştı
+
+`GET /api/requests` uç noktasını yazdım, `conversations._follow`'a "sekmeyi kapatıp dönen biri ne
+olduğunu bulmalı" diye yorum düştüm — ve hiçbir sayfa o ucu çağırmadı. Yenileyince demo sıfırlanıyordu.
+Kendi yorumuyla çelişen kod, yani hata; #22'de öğrendiğim şeyin aynısı başka bir yerde.
+
+Şimdi sayfa açılışta son yürütmeyi buluyor: mesajı, izleme kaydını ve **şu an yapılacak olanı**
+geri çiziyor. İzleme kaydı yeniden oynatılıyor ama konuşma anlatılmıyor — ziyaretçi onu zaten
+okudu, tekrar anlatmak yeni bir hareket gibi görünürdü. Sınırı `snapshot`'a eklenen `seen`
+belirliyor: kaç olay çoktan olmuş.
+
+Konuşma o anki durumu **anlık görüntüden** çiziyor, yeniden oynatmadan değil. Böylece demo süreci
+yeniden başlamış ve bellekteki kayıt gitmiş olsa bile sayfa doğru yeri gösteriyor — yürütme diskte,
+kayıt değil.
+
+Bir de composer artık sebebini söylüyor. Yalnızca soluklaşan bir alan bozuk görünür, ve bu sayfa
+bir yöneticiyi günlerce bekleyebilir.
+
 ### Onay kutusu runtime'ın değil
 
 `/approvals` listesi uygulamanın. Kimin neyi onayladığı şirketin işi; bir gelen kutusu tutan

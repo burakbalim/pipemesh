@@ -100,12 +100,18 @@ class Conversations:
 
     def snapshot(self, execution_id: str) -> Mapping[str, Any]:
         state = self._mesh.get(execution_id)
+        trace = self._traces.get(execution_id)
+
         return {
             "executionId": state.execution_id,
             "workflow": f"{state.workflow_id}@{state.workflow_version}",
             "status": state.status.value,
             "step": state.current_step,
             "variables": state.variables,
+            # How much of the trace already happened. A page rejoining replays it
+            # to fill the panel, and needs to know where the replay ends so it
+            # does not narrate a conversation the visitor already read.
+            "seen": len(trace.events) if trace else 0,
         }
 
     # -- following ----------------------------------------------------------

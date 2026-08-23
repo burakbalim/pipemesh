@@ -29,6 +29,11 @@ const NARRATION = {
 let events = null;
 let current = null;
 
+/* How many replayed events to record without narrating. A page that rejoins
+ * wants the trace back, but not the conversation retold — the visitor already
+ * read it, and saying it twice would make the replay look like new activity. */
+let replaying = 0;
+
 /* -- talking to the server ------------------------------------------------ */
 
 async function send(text) {
@@ -49,6 +54,7 @@ function follow(executionId) {
   if (events) events.close();
   trace.innerHTML = "";
 
+  disable(true);
   identify(executionId);
   events = new EventSource(`/api/requests/${executionId}/events`);
   events.onmessage = (frame) => arrived(JSON.parse(frame.data));
@@ -92,6 +98,11 @@ async function post(url, body) {
 
 function arrived(event) {
   record(event);
+
+  if (replaying > 0) {
+    replaying--;
+    return;
+  }
 
   if (event.kind === "step_started") {
     const line = NARRATION[event.step];
@@ -236,9 +247,15 @@ function money(amount) {
     maximumFractionDigits: 0 }).format(amount);
 }
 
+/* One request at a time, and the field says why rather than only going grey.
+ * A page that stops accepting input without explaining itself reads as broken,
+ * and this one can sit waiting on a manager for as long as that takes. */
 function disable(busy) {
   composer.querySelector("button").disabled = busy;
   message.disabled = busy;
+  message.placeholder = busy
+    ? "waiting for this request to finish…"
+    : "What do you need?";
   if (!busy) message.focus();
 }
 
@@ -263,4 +280,42 @@ EXAMPLES.forEach((example) => {
   suggestions.append(button);
 });
 
-say("system", "", "Ask for something, or pick one of the examples below.");
+/* Rejoin whatever this visitor last started. The execution is on disk and the
+ * demo has been watching it the whole time, so a closed tab, a refresh or a
+ * phone that lost signal costs nothing — which is the claim this page makes
+ * about `wait`, and it should be true of the page as well. */
+async function rejoin() {
+  const mine = await (await fetch("/api/requests")).json();
+  const last = mine.executionIds.at(-1);
+
+  if (!last) {
+    say("system", "", "Ask for something, or pick one of the examples below.");
+    return;
+  }
+
+  const state = await (await fetch(`/api/requests/${last}`)).json();
+  say("mine", "You", state.variables.input.message);
+
+  replaying = state.seen;
+  follow(last);
+  standing(state);
+}
+
+/* Where the execution is now, drawn from the snapshot rather than from the
+ * replay: the trace says what happened, this says what is still to do. */
+function standing(state) {
+  if (state.step === "await_choice") {
+    offer(state.variables.options);
+    return;
+  }
+  if (state.step === "manager_approval") {
+    awaitApproval(state.variables);
+    return;
+  }
+  if (["COMPLETED", "FAILED", "CANCELLED"].includes(state.status)) {
+    conclude({ status: state.status, variables: state.variables });
+    disable(false);
+  }
+}
+
+rejoin();
