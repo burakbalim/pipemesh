@@ -56,11 +56,25 @@ jobs:
           .venv/bin/pip install -q -e ".[dev]"
           .venv/bin/python -m pytest tests -q
 
+      # Two versions, because the first CI run failed on exactly this: Node 22
+      # changed what `--test <dir>` means, the suite passed locally on 20, and
+      # nothing said the two were different. A supported range that is never run
+      # is an assumption, not a range.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: TypeScript SDK (Node 20)
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          npm test
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: TypeScript SDK
+      - name: TypeScript SDK (Node 22)
         working-directory: sdk/typescript
         run: |
           npm ci
