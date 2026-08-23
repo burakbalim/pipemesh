@@ -43,6 +43,7 @@ onunla çelişmez.
 | 26 | [update-replay.md](update-replay.md) | §30.3 — dayanıklı imleç, kaçırılan olayların kurtarılması | **Tamam** (2026-08-22) |
 | 27 | [remote-events.md](remote-events.md) | §9.7 — olay yayını için RPC; `wait` uzak istemciler için tamamlandı | **Tamam** (2026-08-23) |
 | 28 | [sdk-authentication.md](sdk-authentication.md) | §23 — SDK'ların API anahtarı göndermesi; cloud'a erişimin önündeki son engel | **Tamam** (2026-08-23) |
+| 29 | [demo-deployment.md](demo-deployment.md) | CI → GHCR, compose, ve üç görünümlü halka açık demo | **Tamam** (2026-08-23) |
 
 Faz eşlemesi için DESIGN.md §45'e bakın: #1 Phase 1'i, #2–4 Phase 2'yi, #6–7 Phase 3'ü,
 #9–11 Phase 4'ü karşılar. #12 fazlardan bağımsız — #1 tamamlanır tamamlanmaz başlayabilir.

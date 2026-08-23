@@ -1,0 +1,415 @@
+/* Graphite and signal orange: the palette of a machine that stops when a person
+   has to decide. Orange means exactly one thing here — waiting on a human — and
+   is used nowhere else, so the page can be read at a glance from across a desk. */
+
+:root {
+  --ground:        #f4f3f0;
+  --panel:         #ffffff;
+  --panel-edge:    #dedcd6;
+  --ink:           #16191c;
+  --ink-soft:      #5c6268;
+  --ink-faint:     #8d9298;
+  --signal:        #d2551b;   /* stopped, waiting for a person */
+  --signal-soft:   #fbe9dd;
+  --running:       #2b6f6a;   /* the machine is moving */
+  --running-soft:  #e0eeec;
+  --done:          #3d6b2f;
+  --on-done:       #ffffff;
+  --refused:       #9a2f2f;
+  --rule:          #e6e4de;
+  --trace-ground:  #1b1f23;
+  --trace-ink:     #c9cdd2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:       #101315;
+    --panel:        #181c1f;
+    --panel-edge:   #2a2f34;
+    --ink:          #e6e8ea;
+    --ink-soft:     #a0a6ac;
+    --ink-faint:    #6f767d;
+    --signal:       #f0803f;
+    --signal-soft:  #3a2317;
+    --running:      #5aada6;
+    --running-soft: #16302e;
+    --done:         #7bb063;
+    --on-done:      #0e1a09;
+    --refused:      #d97070;
+    --rule:         #24292e;
+    --trace-ground: #0b0e10;
+    --trace-ink:    #b9bfc5;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 16px/1.55 "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+code, pre, .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* -- frame ---------------------------------------------------------------- */
+
+header.top {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding: 1.1rem clamp(1rem, 4vw, 2.5rem);
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel);
+}
+
+header.top .wordmark {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-right: auto;
+}
+
+header.top .wordmark span { color: var(--ink-faint); font-weight: 400; }
+
+header.top nav { display: flex; gap: 1.25rem; }
+
+header.top a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding-bottom: 2px;
+  border-bottom: 2px solid transparent;
+}
+
+header.top a:hover { color: var(--ink); }
+header.top a[aria-current] { color: var(--ink); border-bottom-color: var(--signal); }
+
+main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+h1 {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  margin: 0 0 0.4rem;
+}
+
+.lede {
+  color: var(--ink-soft);
+  max-width: 62ch;
+  margin: 0 0 2rem;
+}
+
+.lede a { color: inherit; }
+
+/* -- the two panes -------------------------------------------------------- */
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+  gap: 1.75rem;
+  align-items: start;
+}
+
+@media (max-width: 62rem) {
+  .split { grid-template-columns: minmax(0, 1fr); }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 3px;
+  padding: 1.25rem;
+}
+
+.panel h2 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-faint);
+  margin: 0 0 1rem;
+  font-weight: 600;
+}
+
+/* -- conversation --------------------------------------------------------- */
+
+.thread { display: flex; flex-direction: column; gap: 0.9rem; }
+
+.turn { display: flex; flex-direction: column; gap: 0.3rem; max-width: 46ch; }
+.turn.mine { align-self: flex-end; align-items: flex-end; }
+
+.turn .who {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+}
+
+.turn .said {
+  background: var(--ground);
+  border: 1px solid var(--panel-edge);
+  border-radius: 3px;
+  padding: 0.6rem 0.8rem;
+}
+
+.turn.mine .said { background: var(--running-soft); border-color: transparent; }
+.turn.system .said { background: transparent; border: 0; padding: 0.2rem 0; color: var(--ink-soft); }
+
+/* A stop is not a remark, so it does not sit in a speech bubble's width: the
+   choice is the widest thing on the page because it is the thing to act on. */
+.turn.stopped { max-width: none; align-self: stretch; }
+
+.turn.stopped .said {
+  background: var(--signal-soft);
+  border-color: transparent;
+  border-left: 3px solid var(--signal);
+}
+
+.turn.stopped .said a { color: var(--signal); }
+
+/* -- choices -------------------------------------------------------------- */
+
+.options { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.5rem; }
+
+.option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem 1rem;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 3px;
+  padding: 0.75rem 0.9rem;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.option:hover:not(:disabled) { border-color: var(--running); }
+.option:disabled { opacity: 0.5; cursor: default; }
+.option .name { font-weight: 600; }
+.option .why { grid-column: 1 / -1; font-size: 0.86rem; color: var(--ink-soft); }
+.option .figures { font-variant-numeric: tabular-nums; font-size: 0.9rem; text-align: right; }
+.option .figures b { display: block; font-weight: 600; }
+.option .figures span { color: var(--ink-faint); }
+
+.option.recommended { border-color: var(--running); box-shadow: inset 3px 0 0 var(--running); }
+.option .tag {
+  grid-column: 1 / -1;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--running);
+}
+
+/* -- composer ------------------------------------------------------------- */
+
+form.composer { display: flex; gap: 0.6rem; margin-top: 1.25rem; }
+
+form.composer input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--panel-edge);
+  border-radius: 3px;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+form.composer input:focus-visible,
+button:focus-visible,
+a:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+button.go {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.65rem 1.1rem;
+  border: 0;
+  border-radius: 3px;
+  background: var(--ink);
+  color: var(--ground);
+  cursor: pointer;
+}
+
+button.go:disabled { opacity: 0.4; cursor: default; }
+
+.suggestions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.7rem; }
+
+.suggestions button {
+  font: inherit;
+  font-size: 0.84rem;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px dashed var(--panel-edge);
+  border-radius: 3px;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+}
+
+.suggestions button:hover { color: var(--ink); border-style: solid; }
+
+/* -- the trace ------------------------------------------------------------ */
+
+/* Deliberately dark in both themes: this is a terminal surface, not part of the
+   page's ground, which is why the greys on it are fixed rather than tokens. */
+.trace {
+  background: var(--trace-ground);
+  color: var(--trace-ink);
+  border-radius: 3px;
+  padding: 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  max-height: 30rem;
+  overflow: auto;
+}
+
+.trace .row { display: grid; grid-template-columns: 2.2rem 8.5rem 1fr; gap: 0.5rem; }
+.trace .seq { color: #5b6167; font-variant-numeric: tabular-nums; text-align: right; }
+.trace .kind.quiet { color: #767c83; }
+.trace .kind.running { color: #6fb3ac; }
+.trace .kind.stopped { color: var(--signal); }
+.trace .step { color: #e8ebee; }
+.trace .note { color: #8d9298; }
+.trace .empty { color: #767c83; }
+
+.about {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 1rem;
+  margin: 1rem 0 0;
+  font-size: 0.78rem;
+}
+
+.about[hidden] { display: none; }
+.about dt { color: var(--ink-faint); }
+.about dd { margin: 0; word-break: break-all; }
+
+/* -- approvals ------------------------------------------------------------ */
+
+.inbox {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  /* Decisions read better in a column than across a wide page: the eye should
+     land on the amount without travelling. */
+  max-width: 44rem;
+}
+
+.request {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-left: 3px solid var(--signal);
+  border-radius: 3px;
+  padding: 1.1rem 1.25rem;
+}
+
+.request h3 { margin: 0 0 0.15rem; font-size: 1.05rem; }
+.request .ref { font-size: 0.78rem; color: var(--ink-faint); }
+
+.request dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1.25rem;
+  margin: 0.9rem 0 1.1rem;
+  font-size: 0.92rem;
+}
+
+.request dt { color: var(--ink-soft); }
+.request dd { margin: 0; font-variant-numeric: tabular-nums; }
+.request dd.over { color: var(--refused); }
+
+.decide { display: flex; gap: 0.6rem; }
+
+.decide button {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.45rem 1rem;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid var(--panel-edge);
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.decide button.approve { background: var(--done); border-color: transparent; color: var(--on-done); }
+.decide button.reject:hover { border-color: var(--refused); color: var(--refused); }
+.decide button:disabled { opacity: 0.4; cursor: default; }
+
+.quiet-inbox {
+  border: 1px dashed var(--panel-edge);
+  border-radius: 3px;
+  padding: 2.5rem 1.25rem;
+  text-align: center;
+  color: var(--ink-faint);
+}
+
+.quiet-inbox a { color: var(--ink-soft); }
+
+/* -- source --------------------------------------------------------------- */
+
+.group { margin-bottom: 2.75rem; }
+.group h2 { font-size: 1.15rem; margin: 0 0 0.3rem; letter-spacing: -0.01em; }
+.group .note { color: var(--ink-soft); max-width: 62ch; margin: 0 0 1.1rem; }
+
+.file {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 3px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.file .path {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.6rem 0.9rem;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.file .path:hover { color: var(--ink); }
+.file .path::before { content: "▸ "; color: var(--ink-faint); }
+.file[open-file] .path::before { content: "▾ "; }
+
+.file pre {
+  margin: 0;
+  padding: 0.9rem;
+  overflow-x: auto;
+  font-size: 0.79rem;
+  line-height: 1.6;
+  background: var(--trace-ground);
+  color: var(--trace-ink);
+}
+
+.file:not([open-file]) pre { display: none; }
+
+.failed {
+  border-left: 3px solid var(--refused);
+  padding: 0.6rem 0.9rem;
+  background: var(--panel);
+  color: var(--refused);
+  font-size: 0.9rem;
+  border-radius: 3px;
+  margin-top: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

@@ -24,7 +24,8 @@ import sys
 import threading
 import time
 
-from pipemesh import CapabilityFailure, ExecutionStatus, PipeMesh, PipeMeshWorker
+import procurement
+from pipemesh import PipeMesh
 
 RUNTIME = os.environ.get("PIPEMESH_TARGET", "localhost:8080")
 ORGANIZATION = os.environ.get("PIPEMESH_ORGANIZATION", "acme")
@@ -34,45 +35,11 @@ ORGANIZATION = os.environ.get("PIPEMESH_ORGANIZATION", "acme")
 # there is nothing to send and nothing here changes.
 
 
-# ---------------------------------------------------------------------------
-# The company's own code, reached as capabilities.
-#
-# The workflow calls them "vendor_search", "budget_remaining" and "place_order"
-# and knows nothing else — not that they are Python, not that they are this
-# process. Moving one behind an MCP server later is an edit to its registration
-# file, and no change here.
-# ---------------------------------------------------------------------------
+# The three capabilities this flow calls live in `procurement.py`, because the
+# web demo under `demo/` serves the same ones. Read that file for what the
+# company actually wrote; what is left here is how a script drives it.
 
-CATALOGUE = [
-    {"vendorId": "v-nordic", "vendor": "Nordic Supply", "amount": 8400, "leadTimeDays": 5},
-    {"vendorId": "v-aegean", "vendor": "Aegean Trading", "amount": 12750, "leadTimeDays": 2},
-    {"vendorId": "v-baltic", "vendor": "Baltic Works", "amount": 21900, "leadTimeDays": 1},
-]
-
-worker = PipeMeshWorker(RUNTIME, organization=ORGANIZATION)
-
-
-@worker.capability("vendor_search")
-def vendor_search(request):
-    return {"found": [dict(row, item=request["item"]) for row in CATALOGUE]}
-
-
-@worker.capability("budget_remaining")
-def budget_remaining(request):
-    return {"costCentre": request["costCentre"], "remaining": 15000, "currency": "EUR"}
-
-
-@worker.capability("place_order")
-def place_order(choice):
-    # Declared `idempotent: false` in its registration, so recovery will never
-    # repeat it: after a crash nobody can tell whether the order was placed, and
-    # guessing is how a company buys the same thing twice.
-    if choice["amount"] > 15000:
-        # A code the workflow could branch on, and deliberately not retryable:
-        # a rule that said no does not say anything different when asked twice.
-        raise CapabilityFailure(code="budget.exceeded", message="over the remaining budget")
-
-    return {"orderId": f"PO-{choice['vendorId']}", "amount": choice["amount"]}
+worker = procurement.serve(RUNTIME, ORGANIZATION)
 
 
 # ---------------------------------------------------------------------------

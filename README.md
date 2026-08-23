@@ -140,8 +140,25 @@ Shared     several applications, several languages, one runtime deployment
 Business logic never moves into the runtime. A workflow may *name* a capability, never carry code:
 implementations live in the application or worker that registered them (§23.1).
 
+Two wirings ship, and they are the same artifacts composed differently rather than two builds:
+[`deploy/on-premise/`](deploy/on-premise) is a single node somebody else operates, and
+[`deploy/cloud/`](deploy/cloud) deploys the API and the dispatcher separately so the part that
+does the work can scale on its own. Neither ships a database.
+
 See [DESIGN.md §26](DESIGN.md) for the boundary, the deployment modes and how the runtime invokes
 work that lives inside an SDK.
+
+## The demo
+
+[`demo/`](demo) is a working application built on the runtime: a purchase request that reads a
+message with a model, calls two of the company's own functions at once, shortlists suppliers, waits
+for the buyer to choose, and stops for a manager above a threshold. Three pages — the buyer's, the
+approver's, and the source behind both.
+
+It is deliberately *not* part of PipeMesh. It holds the sessions and the approver's inbox, because
+whose approval is needed is the application's business and never the runtime's (§3). The flow it
+runs is [`examples/vendor-selection`](examples/vendor-selection), which is a directory of JSON and
+Markdown — no code.
 
 ## Observability
 
@@ -192,7 +209,8 @@ sdk/python/     # client SDK + capability worker                           (Pyth
 sdk/typescript/ # client SDK + capability worker                           (TypeScript)
 sdk/java/       # remote client (embedding the library is the alternative)
 schemas/        # workflow / capability / model JSON schemas               (language-neutral)
-examples/       # simple-chat, tool-calling, approval-flow, parallel-flow
+examples/       # hello, approval-flow, vendor-selection
+demo/           # the public demo, built on examples/vendor-selection    (Python)
 ```
 
 ## Roadmap

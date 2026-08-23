@@ -22,7 +22,11 @@ README.md                      # public overview
 pipemesh-core/                 # workflow model, execution contracts, runtime API
 pipemesh-runtime/              # the runnable runtime: config directory in, gRPC server out
 pipemesh-console/              # sign-up, plans, quota, web console — an application, not a library
+demo/                          # the public demo: an application that uses PipeMesh, not part of it
+examples/                      # runnable configuration directories
 deploy/on-premise/             # single-node compose for an install somebody else operates
+deploy/cloud/                  # the scalable one: api and dispatcher deployed separately
+deploy/demo/                   # the demo stack, against a database somebody already runs
 ```
 
 Read `DESIGN.md` before making architectural claims. Section numbers (§9.8, §26.1, …) are referenced

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PipeMesh — approvals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wordmark">PipeMesh <span>demo</span></div>
+  <nav>
+    <a href="/">Request</a>
+    <a href="/approvals" aria-current="page">Approvals</a>
+    <a href="/source">Source</a>
+  </nav>
+</header>
+
+<main>
+  <h1>Waiting for a manager</h1>
+  <p class="lede">
+    The other side of the same flow. Each of these is a real execution, stopped
+    at <code>manager_approval</code> and persisted &mdash; no thread is held open
+    for it, and the runtime could be restarted underneath this page without
+    losing one. Approving the same request twice changes nothing: the runtime
+    treats a repeated decision as the decision it already has.
+  </p>
+
+  <div class="inbox" id="inbox"></div>
+</main>
+
+<script src="/static/approvals.js"></script>
+</body>
+</html>

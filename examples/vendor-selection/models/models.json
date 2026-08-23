@@ -1,26 +1,19 @@
 {
-  "models": [
-    {
-      "alias": "fast",
+  "models": {
+    "fast": {
       "protocol": "openai-compatible",
-      "settings": {
-        "baseUrl": "https://api.openai.com/v1",
-        "model": "gpt-5-mini",
-        "apiKeyEnv": "OPENAI_API_KEY",
-        "inputPricePerMillion": "0.25",
-        "outputPricePerMillion": "2.00"
-      }
+      "baseUrl": "http://litellm:4000/v1",
+      "model": "fast",
+      "apiKeyEnv": "LITELLM_KEY",
+      "timeoutSeconds": 60
     },
-    {
-      "alias": "reasoning",
+
+    "reasoning": {
       "protocol": "openai-compatible",
-      "settings": {
-        "baseUrl": "https://api.openai.com/v1",
-        "model": "gpt-5",
-        "apiKeyEnv": "OPENAI_API_KEY",
-        "inputPricePerMillion": "1.25",
-        "outputPricePerMillion": "10.00"
-      }
+      "baseUrl": "http://litellm:4000/v1",
+      "model": "reasoning",
+      "apiKeyEnv": "LITELLM_KEY",
+      "timeoutSeconds": 120
     }
-  ]
+  }
 }

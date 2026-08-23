@@ -3,7 +3,7 @@
   "version": "1.0",
   "entry": "understand",
 
-  "budget": { "maxModelCalls": 12, "maxTokens": 120000 },
+  "budget": { "maxModelCalls": 8, "maxTokens": 60000 },
 
   "steps": [
     {
@@ -13,7 +13,8 @@
       "prompt": "procurement.extract.v1",
       "outputSchema": "purchase-request",
       "output": "request",
-      "next": "gather"
+      "next": "gather",
+      "retry": { "maxAttempts": 3, "initialDelay": "1s" }
     },
 
     {
@@ -49,7 +50,8 @@
       "prompt": "procurement.shortlist.v1",
       "outputSchema": "vendor-options",
       "output": "options",
-      "next": "await_choice"
+      "next": "await_choice",
+      "retry": { "maxAttempts": 3, "initialDelay": "1s" }
     },
 
     {
@@ -87,8 +89,10 @@
       "capability": "place_order",
       "input": "$.choice",
       "output": "order",
-      "next": "ordered"
+      "next": "ordered",
+      "onFailure": { "strategy": "goto", "goto": "over_budget" }
     },
-    { "id": "ordered", "type": "terminal", "status": "COMPLETED" }
+    { "id": "ordered", "type": "terminal", "status": "COMPLETED" },
+    { "id": "over_budget", "type": "terminal", "status": "FAILED" }
   ]
 }

@@ -1,0 +1,131 @@
+# Test, then build, then publish. Deploy is somebody pressing a button.
+#
+# There is no deploy step on purpose. This repository is public, and a trigger
+# would put an internal hostname and the names of its secrets in a file anyone
+# can read — a secret's value is hidden, its target is not. Releases are pressed
+# by a person who then knows when a change started running.
+
+name: build
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # The image build runs with -DskipTests, which is right — building an image is
+  # not running a suite. The consequence is that a pipeline which only builds
+  # images runs none of the guards: proto compatibility, version agreement,
+  # stub freshness. They live in `mvn test` so that they run every time, and
+  # this is the step that makes that true.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      - name: Java
+        run: mvn -B test
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Both SDK suites start the real runtime as a child process, and it finds
+      # its configuration directory relative to the working directory. Run them
+      # from anywhere else and the server dies before printing a port.
+      - name: Runtime for the SDK suites
+        run: |
+          mvn -B -q -pl pipemesh-runtime -am -DskipTests install
+          mvn -B -q -pl pipemesh-runtime dependency:build-classpath \
+              -Dmdep.outputFile=target/test-classpath.txt
+
+      - name: Python SDK
+        working-directory: sdk/python
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -e ".[dev]"
+          .venv/bin/python -m pytest tests -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: TypeScript SDK
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          npm test
+
+  publish:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        # The demo's Dockerfile does not sit under a `pipemesh-*` module, so the
+        # path is carried with the name rather than derived from it.
+        include:
+          - image: runtime
+            dockerfile: pipemesh-runtime/Dockerfile
+          - image: console
+            dockerfile: pipemesh-console/Dockerfile
+          - image: demo
+            dockerfile: demo/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Repository in lower case
+        id: name
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_OUTPUT
+
+      - name: Version
+        id: version
+        run: echo "value=$(tr -d '[:space:]' < VERSION)" >> $GITHUB_OUTPUT
+
+      # `staging` rather than `latest`, deliberately. A released image never
+      # carries a tag that moves under it: an install that cannot say what it
+      # runs cannot report a problem, and for somebody running this on their own
+      # hardware `latest` is a dependency that changes by itself. `staging` says
+      # what it is and nobody mistakes it for a release.
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.name.outputs.owner }}/pipemesh-${{ matrix.image }}
+          tags: |
+            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/master' }}
+            type=sha,prefix=sha-,enable=${{ github.ref == 'refs/heads/master' }}
+            type=raw,value=${{ steps.version.outputs.value }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

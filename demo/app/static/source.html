@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PipeMesh — what is behind this</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wordmark">PipeMesh <span>demo</span></div>
+  <nav>
+    <a href="/">Request</a>
+    <a href="/approvals">Approvals</a>
+    <a href="/source" aria-current="page">Source</a>
+  </nav>
+</header>
+
+<main>
+  <h1>What is behind this</h1>
+  <p class="lede">
+    Read from disk by the running process, so what is below is what is running.
+    The flow is a JSON file the runtime compiled; the company's code is ordinary
+    Python that never mentions a workflow. Neither knows how the other is
+    deployed. All of it is on
+    <a href="https://github.com/burakbalim/pipemesh">GitHub</a>.
+  </p>
+
+  <div id="groups"></div>
+</main>
+
+<script src="/static/source.js"></script>
+</body>
+</html>
