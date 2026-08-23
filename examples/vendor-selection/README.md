@@ -56,11 +56,10 @@ belongs to. A choice among options does not — so it is an *event*, matched on 
 execution filed itself under. That is why `place_order` gets `mesh.publish(...)` and the manager
 gets `mesh.approve(...)`.
 
-**Spending is bounded.** The workflow declares a budget in model calls and tokens, and every
-execution records what it used. Registering prices turns that into money — and a workflow with a
-money budget is refused a model whose price nobody registered, because an unpriced model is not a
-free one. These registrations state no price, so the money budget is left off rather than
-guessed at.
+**Spending is bounded, and priced.** The workflow declares a budget in model calls and tokens,
+and the registrations declare what each model charges, so every execution records what it
+actually cost. The two are separate on purpose: a workflow with a *money* budget is refused a
+model whose price nobody registered, because an unpriced model is not a free one (§39).
 
 **A refusal is an outcome.** `place_order` says no above the remaining budget. The step declares
 where a failure goes, so an approved purchase that the company's own code then refuses ends at

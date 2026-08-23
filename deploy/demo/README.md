@@ -36,9 +36,13 @@ public, and a trigger would name the host it deploys to and the secrets it uses.
 
 ## The model is the part to check first
 
-`litellm.yaml` names two Groq models. Which models exist, and which of them honour a
-`response_format` request, is a thing that changes — confirm both with your own key before
-showing this to anyone:
+`litellm.yaml` names two Groq models, both chosen because they declare `structured_outputs` —
+which is the property that matters, not size. A model offering only `json_mode` returns *some*
+JSON rather than the shape that was asked for, and the difference shows up as three retries and
+a failed step.
+
+Which models exist there changes. The first configuration named two that had already been
+withdrawn, so confirm the list against your own key before showing this to anyone:
 
 ```bash
 curl $LITELLM/v1/models -H "Authorization: Bearer $LITELLM_MASTER_KEY"

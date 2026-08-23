@@ -5,7 +5,9 @@
       "baseUrl": "http://litellm:4000/v1",
       "model": "fast",
       "apiKeyEnv": "LITELLM_KEY",
-      "timeoutSeconds": 60
+      "timeoutSeconds": 60,
+      "inputPricePerMillion": "0.075",
+      "outputPricePerMillion": "0.300"
     },
 
     "reasoning": {
@@ -13,7 +15,9 @@
       "baseUrl": "http://litellm:4000/v1",
       "model": "reasoning",
       "apiKeyEnv": "LITELLM_KEY",
-      "timeoutSeconds": 120
+      "timeoutSeconds": 120,
+      "inputPricePerMillion": "0.150",
+      "outputPricePerMillion": "0.600"
     }
   }
 }
