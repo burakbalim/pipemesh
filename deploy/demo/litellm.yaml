@@ -21,4 +21,10 @@ litellm_settings:
   # workflow, where it would look like the runtime's fault.
   fallbacks:
     - reasoning: ["fast"]
+
+  # A model that does not support `response_format` gets the parameter dropped
+  # rather than a 400 back. The trade is deliberate: dropping loses the
+  # structured-output request, so the prompts also ask for JSON in words and
+  # PipeMesh validates the answer either way. Refusing instead would make one
+  # unsupported model take the whole demo down.
   drop_params: true

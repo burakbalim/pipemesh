@@ -34,6 +34,21 @@ push to master. It builds nothing on the host.
 Deploying is a person pressing a button. There is no trigger in CI on purpose: this repository is
 public, and a trigger would name the host it deploys to and the secrets it uses.
 
+## The model is the part to check first
+
+`litellm.yaml` names two Groq models. Which models exist, and which of them honour a
+`response_format` request, is a thing that changes — confirm both with your own key before
+showing this to anyone:
+
+```bash
+curl $LITELLM/v1/models -H "Authorization: Bearer $LITELLM_MASTER_KEY"
+```
+
+The runtime asks for structured output and validates the answer at the step boundary either way,
+the prompts ask for JSON in words as well, and both model steps retry. A model that cannot produce
+the shape will still fail — visibly, at the step that asked — rather than quietly producing
+something odd three steps later.
+
 ## What is not here
 
 No PostgreSQL. This stack connects to a database, it does not operate one — the same reason

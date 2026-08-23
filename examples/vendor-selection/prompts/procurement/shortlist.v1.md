@@ -7,3 +7,5 @@ Budget remaining this quarter: {{ $.budget }}
 Rank them and say plainly why each one is on the list. Do not pick one that
 would exceed the remaining budget. Recommend the one you would choose, and say
 so with its vendorId.
+
+Answer with a single JSON object and nothing else — no prose, no code fence.
