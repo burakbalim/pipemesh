@@ -52,7 +52,14 @@ of line by line, that is what to look at.
 ## Bringing it up
 
 The compose pulls `:staging` images from GHCR, published by `.github/workflows/build.yml` on every
-push to master. It builds nothing on the host.
+push to master. It builds nothing on the host, and it reads nothing from the host: the workflows
+and the proxy's configuration are copied out of the demo image into volumes by a `config` service
+that runs once and exits.
+
+That is deliberate. A relative bind mount assumes the deployment left a checkout beside the compose
+file, and a platform that copies only the compose file leaves Docker to invent an empty directory
+at each missing source — the runtime then starts against a config directory with no workflows in
+it, and nothing says so. Everything comes out of an image instead.
 
 Deploying is a person pressing a button. There is no trigger in CI on purpose: this repository is
 public, and a trigger would name the host it deploys to and the secrets it uses.

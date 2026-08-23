@@ -13,6 +13,31 @@
 # deployment's proxy would only work at that deployment.
 
 services:
+  # Everything this stack reads from disk comes out of an image rather than off
+  # the host. Relative bind mounts assume the deployment left a checkout beside
+  # the compose file; several platforms copy only the compose file, and Docker
+  # then creates an empty directory at each missing source — leaving the runtime
+  # pointed at a config directory with no workflows in it, and nothing saying so.
+  #
+  # It also settles a mismatch that was here before: the runtime and the demo's
+  # source page now read the same bytes, because both come from this image.
+  config:
+    image: ghcr.io/burakbalim/pipemesh-demo:staging
+    # A fresh volume belongs to root and the demo image runs as someone else.
+    # This container only copies files and exits.
+    user: root
+    command:
+      - sh
+      - -c
+      - >
+        rm -rf /workflows/* &&
+        cp -a /app/examples/vendor-selection/. /workflows/ &&
+        cp -a /app/deploy/litellm.yaml /litellm/config.yaml
+    volumes:
+      - workflows:/workflows
+      - litellm-config:/litellm
+    restart: "no"
+
   # Vendor plumbing: which provider actually serves a model, whose key it uses,
   # and what to fall back to. PipeMesh sees one OpenAI-compatible endpoint and
   # knows none of it.
@@ -22,7 +47,9 @@ services:
   # counting the same money is how two numbers start disagreeing.
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
-    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    command: ["--config", "/config/config.yaml", "--port", "4000"]
+    depends_on:
+      config: { condition: service_completed_successfully }
     environment:
       # Named here, held wherever the deployment keeps its environment. A key
       # never belongs in a committed file — the rule the model registrations
@@ -30,14 +57,16 @@ services:
       GROQ_API_KEY: ${GROQ_API_KEY:?set this in the environment}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set this in the environment}
     volumes:
-      - ./litellm.yaml:/app/config.yaml:ro
+      - litellm-config:/config:ro
     restart: unless-stopped
 
   # Serves callers and drives executions. One process is right for a demo;
   # splitting api from dispatcher is two environment variables when it is not.
   runtime:
     image: ghcr.io/burakbalim/pipemesh-runtime:staging
-    depends_on: [litellm]
+    depends_on:
+      config: { condition: service_completed_successfully }
+      litellm: { condition: service_started }
     environment:
       PIPEMESH_CONFIG: /etc/pipemesh
       PIPEMESH_DB_URL: ${PIPEMESH_DB_URL:?set this in the environment}
@@ -46,10 +75,10 @@ services:
       PIPEMESH_DISPATCH: "on"
       LITELLM_KEY: ${LITELLM_MASTER_KEY}
     volumes:
-      # The workflows this runtime serves, from the deployment's checkout.
-      # Nothing is baked into the image: which flows exist is the operator's
-      # decision, not the image's (§31).
-      - ../../examples/vendor-selection:/etc/pipemesh:ro
+      # The workflows this runtime serves. Still not baked into the runtime
+      # image — which flows exist stays the operator's decision (§31); here the
+      # operator is the demo, and it hands them over in a volume.
+      - workflows:/etc/pipemesh:ro
     restart: unless-stopped
 
   # Accounts, keys, plans and quota. The product.
@@ -104,12 +133,13 @@ services:
     environment:
       PIPEMESH_TARGET: runtime:8080
       PIPEMESH_ORGANIZATION: demo
-    volumes:
-      # The same files the runtime is serving, not the image's copy of them.
-      # The source page claims to show what is running; two copies that could
-      # drift would make that claim false the first time they did.
-      - ../../examples/vendor-selection:/app/examples/vendor-selection:ro
+    # No mount: the source page reads the copy inside this image, which is the
+    # one the config service handed to the runtime.
     restart: unless-stopped
+
+volumes:
+  workflows:
+  litellm-config:
 
 networks:
   # The runtime, the model proxy and the two services talk to each other here,

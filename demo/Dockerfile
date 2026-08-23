@@ -17,6 +17,7 @@ COPY sdk/python sdk/python
 RUN pip install --no-cache-dir -r demo/requirements.txt ./sdk/python
 
 COPY examples/vendor-selection examples/vendor-selection
+COPY deploy/demo/litellm.yaml deploy/litellm.yaml
 COPY demo/app demo/app
 
 USER demo
