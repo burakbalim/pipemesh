@@ -45,7 +45,16 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import io.pipemesh.core.execution.ExecutionId;
+import io.pipemesh.core.state.ExecutionRecord;
+import io.pipemesh.core.state.StateStore;
+import io.pipemesh.core.state.StepRecord;
+
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Called over a real gRPC channel with the generated stub, because what is worth
@@ -73,10 +82,14 @@ class PipeMeshServiceTest {
     private ManagedChannel channel;
     private PipeMeshGrpc.PipeMeshBlockingStub client;
     private final ExecutionUpdateBroker broker = new ExecutionUpdateBroker();
+    private WorkflowRuntime runtime;
+
+    /** Armed by a test that wants something to happen mid-read; otherwise inert. */
+    private final AtomicReference<Runnable> duringRead = new AtomicReference<>();
 
     @BeforeEach
     void startServer() throws IOException {
-        InMemoryStateStore stateStore = new InMemoryStateStore();
+        StateStore stateStore = new ReadsCanBeInterrupted(new InMemoryStateStore(), duringRead);
         StepExecutors executors = StepExecutors.of(
                 new ConditionStepExecutor(),
                 new ApprovalStepExecutor(new InMemoryApprovalStore()),
@@ -86,7 +99,7 @@ class PipeMeshServiceTest {
                 new InMemoryWorkflowRegistry(new WorkflowCompiler(executors));
         workflows.register(new WorkflowDefinitionReader().read(BOOKING));
 
-        WorkflowRuntime runtime = new DefaultWorkflowRuntime(
+        runtime = new DefaultWorkflowRuntime(
                 workflows, stateStore, new WorkflowExecutor(stateStore, executors, broker),
                 new DefaultIntentResolver(
                         IntentRegistry.of(List.of(new IntentDefinition(
@@ -501,5 +514,82 @@ class PipeMeshServiceTest {
         }
 
         assertEquals("FINISHED", kinds.get(kinds.size() - 1), kinds.toString());
+    }
+
+    /**
+     * The window this stream used to have a hole in.
+     *
+     * <p>A watcher read a snapshot and then subscribed. Anything published in
+     * between belonged to neither — taken after the snapshot, published before
+     * the subscription — and vanished, leaving a sequence that still looked
+     * perfectly continuous. The client landing in that window is precisely the
+     * one acting on what the snapshot just told it, which is what makes the
+     * window worth closing rather than making smaller.
+     *
+     * <p>Reproduced rather than raced: the approval is delivered while the
+     * snapshot is being read, so the update lands mid-window every time.
+     */
+    @Test
+    void losesNothingPublishedWhileTheSnapshotIsBeingRead() {
+        String executionId = startExpensive().getExecutionId();
+        duringRead.set(() -> approve(executionId));
+
+        // With the window open this stream never ends: the lost update is the one
+        // that finishes the execution, so nothing ever tells the watcher to stop.
+        // A deadline turns that into a failure instead of a hung build.
+        List<String> kinds = new ArrayList<>();
+        try {
+            client.withDeadlineAfter(10, TimeUnit.SECONDS)
+                    .watchExecution(WatchExecutionRequest.newBuilder()
+                            .setExecutionId(executionId).build())
+                    .forEachRemaining(update -> kinds.add(update.getUpdateCase().name()));
+        } catch (StatusRuntimeException timedOut) {
+            fail("the stream never ended, so something published mid-window was lost: " + kinds);
+        }
+
+        assertTrue(kinds.contains("RESUMED"),
+                "the resume published while the snapshot was read went missing: " + kinds);
+    }
+
+    /**
+     * Delegates every read and write, and lets a test interrupt one read.
+     *
+     * <p>Reaching in at the store rather than at the runtime because the service
+     * needs the concrete {@link DefaultWorkflowRuntime} to scope a caller, so a
+     * runtime wrapped for a test would be refused before it proved anything.
+     */
+    private record ReadsCanBeInterrupted(StateStore delegate, AtomicReference<Runnable> once)
+            implements StateStore {
+
+        @Override
+        public ExecutionRecord create(ExecutionRecord record) {
+            return delegate.create(record);
+        }
+
+        @Override
+        public Optional<ExecutionRecord> find(ExecutionId executionId) {
+            Optional<ExecutionRecord> found = delegate.find(executionId);
+            Runnable armed = once.getAndSet(null);
+            if (armed != null) {
+                armed.run();
+            }
+            return found;
+        }
+
+        @Override
+        public ExecutionRecord advance(ExecutionRecord record, StepRecord step) {
+            return delegate.advance(record, step);
+        }
+
+        @Override
+        public List<ExecutionRecord> findStale(
+                io.pipemesh.core.execution.ExecutionStatus status, long untouchedSince, int limit) {
+            return delegate.findStale(status, untouchedSince, limit);
+        }
+
+        @Override
+        public List<StepRecord> historyOf(ExecutionId executionId) {
+            return delegate.historyOf(executionId);
+        }
     }
 }

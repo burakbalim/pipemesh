@@ -186,9 +186,10 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
      * The runtime, when it can answer on a caller's behalf.
      *
      * <p>Isolation needs a caller, and only the default implementation takes one.
-     * A custom {@link WorkflowRuntime} that does not is served unscoped — its
-     * author owns that decision, and pretending to enforce something this cannot
-     * see would be worse.
+     * A custom {@link WorkflowRuntime} is refused rather than served unscoped:
+     * dropping the check quietly would turn "every execution carries its
+     * organization" into something that holds until somebody supplies their own
+     * runtime (§22.2).
      */
     private DefaultWorkflowRuntime scoped() {
         if (runtime instanceof DefaultWorkflowRuntime scoped) {
@@ -229,18 +230,45 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
         AtomicReference<AutoCloseable> unsubscribe = new AtomicReference<>(() -> {
         });
 
-        // Sequence 0 is where things stood when this watcher arrived. Without it a
-        // client has no moment it can point at and say "from here I am listening",
-        // and anything that happens between asking to watch and being subscribed
-        // is lost with no way to notice.
-        // Fully qualified: the proto has a message of the same name.
-        Optional<io.pipemesh.core.execution.ExecutionSnapshot> arrival =
-                runtime.snapshot(executionId);
+        // Subscribed first, holding everything, and only then read. Reading first
+        // leaves a window between the snapshot and the subscription in which a
+        // published update belongs to neither — the snapshot was taken before it
+        // and the subscription began after it — so it is lost with nothing to
+        // show that it ever existed. That window is small and a client that acts
+        // on the snapshot is exactly what lands in it.
+        //
+        // The cost is that an update may arrive twice: once reflected in the
+        // snapshot or the replayed history, and once from the buffer. Delivering
+        // something twice is a client's problem to shrug at; delivering it never
+        // is one nobody can even see.
+        List<ExecutionUpdate> held = new ArrayList<>();
+        AtomicBoolean replaying = new AtomicBoolean(true);
+
         // One counter for this stream, and this stream only: the snapshot is
         // zero, replayed history follows, and live updates carry on from there.
         // Nothing else shares it, so it never goes backwards for a watcher that
         // replayed or starts halfway for one that joined late.
         AtomicLong sequence = new AtomicLong();
+
+        // The pump exists only once there is something to pump into; until the
+        // replay is done every update goes to the buffer instead.
+        AtomicReference<UpdatePump> pump = new AtomicReference<>();
+
+        unsubscribe.set(broker.watch(executionId, Set.copyOf(request.getExcludeList()), update -> {
+            synchronized (held) {
+                if (replaying.get()) {
+                    held.add(update);
+                    return;
+                }
+            }
+            pump.get().offer(numbered(update, sequence));
+        }));
+
+        // Sequence 0 is where things stood when this watcher arrived: the moment a
+        // client can point at and say "from here I am listening".
+        // Fully qualified: the proto has a message of the same name.
+        Optional<io.pipemesh.core.execution.ExecutionSnapshot> arrival =
+                runtime.snapshot(executionId);
 
         arrival.ifPresent(snapshot -> call.onNext(ExecutionUpdate.newBuilder()
                 .setSequence(0)
@@ -257,38 +285,21 @@ public final class PipeMeshService extends PipeMeshGrpc.PipeMeshImplBase {
         if (arrival.map(snapshot -> snapshot.status().isTerminal()).orElse(true)) {
             replay(executionId, request.getFromStep(), sequence, call::onNext);
             call.onCompleted();
+            close(unsubscribe.get());
             return;
         }
 
-        UpdatePump pump = new UpdatePump(call);
+        pump.set(new UpdatePump(call));
         subscription.set(() -> {
-            pump.close();
+            pump.get().close();
             unsubscribe.get().close();
         });
 
-        // Subscribed before the history is read, and holding what arrives while
-        // it is. Reading first would lose everything that happened in between —
-        // the same loss sequence 0 exists to prevent — and writing live updates
-        // before older replayed ones would hand the client the past after the
-        // present.
-        List<ExecutionUpdate> held = new ArrayList<>();
-        AtomicBoolean replaying = new AtomicBoolean(true);
-
-        unsubscribe.set(broker.watch(executionId, Set.copyOf(request.getExcludeList()), update -> {
-            synchronized (held) {
-                if (replaying.get()) {
-                    held.add(update);
-                    return;
-                }
-            }
-            pump.offer(numbered(update, sequence));
-        }));
-
-        replay(executionId, request.getFromStep(), sequence, pump::offer);
+        replay(executionId, request.getFromStep(), sequence, pump.get()::offer);
 
         synchronized (held) {
             replaying.set(false);
-            held.forEach(update -> pump.offer(numbered(update, sequence)));
+            held.forEach(update -> pump.get().offer(numbered(update, sequence)));
         }
 
         call.setOnCancelHandler(() -> close(subscription.get()));
