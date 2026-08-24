@@ -15,6 +15,11 @@ Workflow JSON  →  WHAT should happen
 Runtime        →  HOW it happens
 ```
 
+**[Try it →](https://demo-pipemesh.getspeakhub.com/)** — a purchase request running on this
+runtime: a model reads it, two of the company's own functions are called at once, and it stops for
+a person above €10,000. The [source page](https://demo-pipemesh.getspeakhub.com/source) shows the
+files the running process is reading.
+
 > **Status:** v0.1, first slice complete. A workflow described in a configuration directory runs end
 > to end — model, condition, capability over MCP, human approval, an external event — survives a
 > process restart, and reports itself to any OTLP backend. See [DESIGN.md](DESIGN.md) for the full
@@ -150,6 +155,11 @@ work that lives inside an SDK.
 
 ## The demo
 
+**Live at [demo-pipemesh.getspeakhub.com](https://demo-pipemesh.getspeakhub.com/).** Two pages to
+open side by side: the buyer's, and the [approver's](https://demo-pipemesh.getspeakhub.com/approvals).
+Start a request over €10,000 and it stops, persisted, until somebody answers on the other page —
+close the tab in between and it is still there when you come back.
+
 [`demo/`](demo) is a working application built on the runtime: a purchase request that reads a
 message with a model, calls two of the company's own functions at once, shortlists suppliers, waits
 for the buyer to choose, and stops for a manager above a threshold. Three pages — the buyer's, the
@@ -237,6 +247,10 @@ management or observability. If the engine has to change, the abstraction is lea
 ## Documentation
 
 - [DESIGN.md](DESIGN.md) — full technical architecture & design document (47 sections)
+
+## Contact
+
+Questions, or interested in running this on your own workflows — [info@getspeakhub.com](mailto:info@getspeakhub.com).
 
 ## License
 
