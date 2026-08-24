@@ -46,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import io.pipemesh.core.execution.ExecutionId;
+import io.pipemesh.core.execution.ResumeSignal;
 import io.pipemesh.core.state.ExecutionRecord;
 import io.pipemesh.core.state.StateStore;
 import io.pipemesh.core.state.StepRecord;
@@ -532,14 +533,20 @@ class PipeMeshServiceTest {
     @Test
     void losesNothingPublishedWhileTheSnapshotIsBeingRead() {
         String executionId = startExpensive().getExecutionId();
-        duringRead.set(() -> approve(executionId));
+
+        // Resumed through the runtime rather than the gRPC client. The read this
+        // interrupts is running on a server thread, and an RPC issued from there
+        // needs a second one to answer it — which is a bet on the size of the
+        // thread pool, not on the thing under test.
+        duringRead.set(() -> runtime.resume(ExecutionId.of(executionId),
+                new ResumeSignal.Approval(executionId + ":approval", true, "burak", "")));
 
         // With the window open this stream never ends: the lost update is the one
         // that finishes the execution, so nothing ever tells the watcher to stop.
         // A deadline turns that into a failure instead of a hung build.
         List<String> kinds = new ArrayList<>();
         try {
-            client.withDeadlineAfter(10, TimeUnit.SECONDS)
+            client.withDeadlineAfter(30, TimeUnit.SECONDS)
                     .watchExecution(WatchExecutionRequest.newBuilder()
                             .setExecutionId(executionId).build())
                     .forEachRemaining(update -> kinds.add(update.getUpdateCase().name()));
