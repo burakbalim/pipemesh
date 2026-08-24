@@ -14,9 +14,6 @@ of them should be:
 
 | Variable | What it is |
 |---|---|
-| `PROXY_NETWORK` | the docker network the reverse proxy is already on, so it can reach these containers |
-| `DEMO_HOST`, `CONSOLE_HOST` | the hostnames those two answer on |
-| `CERT_RESOLVER` | the proxy's ACME resolver; defaults to `letsencrypt` |
 | `PIPEMESH_DB_URL` | JDBC URL of the existing PostgreSQL, e.g. `jdbc:postgresql://host:5432/pipemesh` |
 | `PIPEMESH_DB_USER`, `PIPEMESH_DB_PASSWORD` | its credentials |
 | `CONSOLE_BASE_URL` | where the console is reachable, used in verification links |
@@ -37,8 +34,14 @@ upstream key certainly is not.
 
 The labels assume a Traefik with `http` and `https` entrypoints and an ACME resolver, which is
 what almost every one-host setup already has. Both services get an HTTP router that redirects to
-HTTPS and an HTTPS router with TLS; nothing about them is specific to one installation, which is
-why the network name and the hostnames come from the environment.
+HTTPS and an HTTPS router with TLS.
+
+The hostnames and the proxy's network are written into the file rather than taken from the
+environment, which is not a preference — it is what works. Several platforms interpolate
+`environment:` but hand `labels:` to the container verbatim, and the proxy then tries to route a
+host literally named `${DEMO_HOST}`. That failure is quiet in the worst way: every container is
+healthy, the logs look clean, and the site answers with somebody else's error page. Forking this
+means editing those two Host rules and the network name.
 
 A DNS-01 resolver issues certificates without the host being reachable on port 80 — worth knowing
 if the names sit behind a CDN.

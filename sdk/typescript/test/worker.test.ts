@@ -145,4 +145,21 @@ describe("PipeMesh worker", () => {
       "something_else",
     );
   });
+
+  it("keeps trying when it starts before the runtime", async () => {
+    // The deployment case: this process came up first. A worker that gave up on
+    // the first refused connection would leave the application running and
+    // unable to do any work, with nothing to say so — the web server it sits
+    // next to answers perfectly well.
+    const worker = new PipeMeshWorker("localhost:1", { organization: "acme" });
+    worker.capability("calculate_discount", () => ({ rate: 0.5 }));
+    worker.start();
+
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // Surviving the wait is the assertion: the old code threw from the stream's
+    // error handler, which takes the process down rather than failing a test.
+    assert.ok(true);
+    worker.stop();
+  });
 });

@@ -8,7 +8,9 @@ reachable address, certificate or firewall exception (DESIGN.md §26.1).
 from __future__ import annotations
 
 import queue
+import sys
 import threading
+import time
 import traceback
 from concurrent import futures
 from dataclasses import dataclass
@@ -22,6 +24,12 @@ from . import pipemesh_pb2 as pb
 from . import pipemesh_pb2_grpc as rpc
 
 Capability = Callable[[Mapping[str, Any]], Any]
+
+# How long to wait before reconnecting, doubling up to the cap. The common first
+# failure is a deployment where the runtime is a few seconds behind this process;
+# the common later one is the runtime restarting. Both look the same from here.
+_RETRY_MIN_SECONDS = 0.5
+_RETRY_MAX_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -82,7 +90,9 @@ class PipeMeshWorker:
         # Invocations run off the reading thread, so one slow capability does not
         # stop this worker from accepting the others.
         self._work = futures.ThreadPoolExecutor(max_workers=concurrency)
-        self._running = threading.Event()
+        # Set when someone asks this worker to stop — which is also how the
+        # retry loop sleeps without ignoring a shutdown.
+        self._stopped = threading.Event()
 
     def capability(self, name: str) -> Callable[[Capability], Capability]:
         """Register a function under the name a capability registration uses."""
@@ -94,22 +104,56 @@ class PipeMeshWorker:
         return register
 
     def run(self) -> None:
-        """Connect and serve until stopped. Blocks."""
-        self._running.set()
-        self._outbound.put(pb.WorkerMessage(
+        """Connect and serve until stopped. Blocks.
+
+        Reconnects on its own. A runtime that restarted, a proxy that closed an
+        idle stream, and this process simply having started first are the same
+        event from here: the connection went away and there are still
+        capabilities to serve. Stopping at the first failure would leave the
+        application up and quietly unable to do any work — an execution then
+        waits at its capability step for a worker that is never coming back.
+        """
+        self._stopped.clear()
+        delay = _RETRY_MIN_SECONDS
+
+        while not self._stopped.is_set():
+            connected_at = time.monotonic()
+            try:
+                self._serve()
+            except grpc.RpcError as failure:
+                # Stopping closes the stream, and the cancellation that follows is
+                # the expected end of a shutdown rather than something to retry.
+                if self._stopped.is_set():
+                    return
+                print(f"pipemesh: worker connection lost ({failure.code().name}); "
+                      f"reconnecting in {delay:.1f}s", file=sys.stderr)
+
+            if self._stopped.is_set():
+                return
+
+            # A connection that lasted is proof the runtime is reachable, so the
+            # next failure starts over rather than inheriting a long wait.
+            if time.monotonic() - connected_at > _RETRY_MAX_SECONDS:
+                delay = _RETRY_MIN_SECONDS
+
+            self._stopped.wait(delay)
+            delay = min(delay * 2, _RETRY_MAX_SECONDS)
+
+    def _serve(self) -> None:
+        """One connection: register, then answer what arrives until it ends."""
+        # A queue per connection. Results still waiting when a stream died belong
+        # to invocations the runtime has already written off, so delivering them
+        # over the next connection would be answering a question nobody asked.
+        outbound: "queue.Queue[Optional[pb.WorkerMessage]]" = queue.Queue()
+        self._outbound = outbound
+        outbound.put(pb.WorkerMessage(
             registration=pb.WorkerRegistration(
                 organization_id=self._organization,
                 capability_ids=list(self._capabilities),
             )))
 
-        try:
-            for invocation in self._stub.Connect(self._requests()):
-                self._work.submit(self._answer, invocation)
-        except grpc.RpcError as failure:
-            if self._running.is_set():
-                raise
-            # Stopping closes the stream, and the cancellation that follows is the
-            # expected end of a normal shutdown rather than a failure.
+        for invocation in self._stub.Connect(self._requests(outbound)):
+            self._work.submit(self._answer, invocation, outbound)
 
     def start(self) -> threading.Thread:
         """Serve on a background thread, for applications with their own loop."""
@@ -118,7 +162,7 @@ class PipeMeshWorker:
         return thread
 
     def stop(self) -> None:
-        self._running.clear()
+        self._stopped.set()
         self._outbound.put(None)
         self._work.shutdown(wait=False)
         if self._owns_channel:
@@ -130,14 +174,14 @@ class PipeMeshWorker:
     def __exit__(self, *_: Any) -> None:
         self.stop()
 
-    def _requests(self):
+    def _requests(self, outbound):
         while True:
-            message = self._outbound.get()
+            message = outbound.get()
             if message is None:
                 return
             yield message
 
-    def _answer(self, invocation: Any) -> None:
+    def _answer(self, invocation: Any, outbound) -> None:
         result = pb.CapabilityResult(invocation_id=invocation.invocation_id)
 
         function = self._capabilities.get(invocation.capability_id)
@@ -147,7 +191,7 @@ class PipeMeshWorker:
                 message=f"this worker does not serve '{invocation.capability_id}'",
                 retryable=False,
             ))
-            self._outbound.put(pb.WorkerMessage(result=result))
+            outbound.put(pb.WorkerMessage(result=result))
             return
 
         try:
@@ -167,7 +211,7 @@ class PipeMeshWorker:
             ))
             traceback.print_exc()
 
-        self._outbound.put(pb.WorkerMessage(result=result))
+        outbound.put(pb.WorkerMessage(result=result))
 
 
 def _to_struct(value: Any) -> struct_pb2.Struct:

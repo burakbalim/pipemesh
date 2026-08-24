@@ -50,6 +50,13 @@ export class CapabilityFailure extends Error {
   }
 }
 
+// How long to wait before reconnecting, doubling up to the cap. The common
+// first failure is a deployment where the runtime is a few seconds behind this
+// process; the common later one is the runtime restarting. Both look the same
+// from here, and neither should end this worker.
+const RETRY_MIN_MS = 500;
+const RETRY_MAX_MS = 30_000;
+
 export interface WorkerOptions {
   /** Identifies this worker, the same way it identifies a client. */
   apiKey?: string;
@@ -63,6 +70,7 @@ export class PipeMeshWorker {
   private readonly capabilities = new Map<string, CapabilityFunction>();
   private stream?: grpc.ClientDuplexStream<unknown, any>;
   private stopping = false;
+  private retry?: NodeJS.Timeout;
   private readonly metadata: grpc.Metadata;
 
   constructor(target = "localhost:8080", options: WorkerOptions = {}) {
@@ -84,20 +92,37 @@ export class PipeMeshWorker {
     return this;
   }
 
-  /** Connect and serve until stopped. */
+  /**
+   * Connect and serve until stopped, reconnecting on its own.
+   *
+   * A runtime that restarted, a proxy that closed an idle stream, and this
+   * process simply having started first are the same event from here: the
+   * connection went away and there are still capabilities to serve. Stopping at
+   * the first failure would leave the application up and quietly unable to do
+   * any work — an execution then waits at its capability step for a worker that
+   * is never coming back.
+   */
   start(): this {
+    this.stopping = false;
+    this.connect(RETRY_MIN_MS);
+    return this;
+  }
+
+  private connect(delay: number): void {
+    if (this.stopping) return;
+
     const stream = (this.client as unknown as Record<string, Function>).Connect.call(
       this.client,
       this.metadata,
     ) as grpc.ClientDuplexStream<unknown, any>;
     this.stream = stream;
+    const openedAt = Date.now();
 
     stream.on("data", (invocation) => void this.answer(invocation));
-    stream.on("error", (failure) => {
-      if (!this.stopping) throw failure;
-      // Stopping ends the stream, and the cancellation that follows is the end of
-      // a normal shutdown rather than a failure.
-    });
+    // A failed stream also emits "close", which is where the retry lives. Left
+    // unhandled, this event would take the whole process down instead.
+    stream.on("error", () => undefined);
+    stream.on("close", () => this.reconnect(openedAt, delay));
 
     stream.write({
       registration: {
@@ -105,11 +130,23 @@ export class PipeMeshWorker {
         capabilityIds: [...this.capabilities.keys()],
       },
     });
-    return this;
+  }
+
+  private reconnect(openedAt: number, delay: number): void {
+    if (this.stopping) return;
+
+    // A connection that lasted is proof the runtime is reachable, so the next
+    // failure starts over rather than inheriting a long wait.
+    const wait = Date.now() - openedAt > RETRY_MAX_MS ? RETRY_MIN_MS : delay;
+
+    this.retry = setTimeout(() => this.connect(Math.min(wait * 2, RETRY_MAX_MS)), wait);
+    // A pending retry is not a reason to keep the process alive.
+    this.retry.unref?.();
   }
 
   stop(): void {
     this.stopping = true;
+    if (this.retry) clearTimeout(this.retry);
     this.stream?.end();
     this.client.close();
   }
