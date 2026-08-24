@@ -35,6 +35,7 @@ class IntentResolverTest {
     private static final class ScriptedModel implements MessagingProvider {
 
         final List<String> prompts = new ArrayList<>();
+        final List<JsonNode> schemas = new ArrayList<>();
         private final String answer;
 
         ScriptedModel(String answer) {
@@ -49,6 +50,7 @@ class IntentResolverTest {
         @Override
         public CompletionResponse complete(CompletionRequest request) {
             prompts.add(request.prompt());
+            request.outputSchemaIfAny().ifPresent(schemas::add);
             return new CompletionResponse(parse(answer), "scripted-1", 12, 4, 1);
         }
 
@@ -187,5 +189,35 @@ class IntentResolverTest {
         // step, no branch, no instruction on how to proceed (§37).
         assertEquals(WorkflowId.of("refund_request"), resolved.workflow());
         assertEquals(IntentId.of("request_refund"), resolved.intent());
+    }
+
+    /**
+     * Providers running structured output in strict mode refuse a schema that
+     * leaves any object open — Groq and OpenAI both do. A schema this runtime
+     * builds itself has to satisfy them, and the failure is a 400 from the
+     * provider rather than anything the tests would otherwise notice: a stub
+     * model accepts whatever it is sent, which is exactly why this asserts on
+     * the request instead of the answer.
+     */
+    @Test
+    void asksForAnAnswerShapeAStrictProviderWillAccept() {
+        resolverWith("{\"intent\": \"request_refund\", \"confidence\": 0.9}", 0.6, true)
+                .resolve("something no phrase matches");
+
+        assertEquals(1, model.schemas.size(), "the model was asked without a schema");
+        assertClosed(model.schemas.get(0), "$");
+    }
+
+    /** Every object in the schema, however deep, has to be closed. */
+    private static void assertClosed(JsonNode schema, String path) {
+        if (!"object".equals(schema.path("type").asText())) {
+            return;
+        }
+        assertTrue(schema.path("additionalProperties").isBoolean()
+                        && !schema.path("additionalProperties").asBoolean(),
+                path + " does not set additionalProperties: false");
+
+        schema.path("properties").fields().forEachRemaining(
+                field -> assertClosed(field.getValue(), path + "." + field.getKey()));
     }
 }

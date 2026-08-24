@@ -36,6 +36,7 @@ public final class DefaultIntentResolver implements IntentResolver {
     private static final String ANSWER_SCHEMA = """
             {
               "type": "object",
+              "additionalProperties": false,
               "properties": {
                 "intent":     {"type": "string"},
                 "confidence": {"type": "number"}
