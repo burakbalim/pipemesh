@@ -27,6 +27,14 @@ class Group:
 
 GROUPS = [
     Group(
+        "What a message is read as",
+        "Phrases first, a model only when they do not settle it. Reading a message picks a "
+        "workflow and stops there — never a step to start at, never a branch to take. A "
+        "greeting matches nothing, so nothing runs.",
+        [EXAMPLE / "intents" / "intents.json",
+         EXAMPLE / "prompts" / "intent" / "classify.v1.md"],
+    ),
+    Group(
         "The flow",
         "Declarative. Moving the approval threshold from ten thousand to fifty "
         "thousand is editing this file — no deployment, no code.",

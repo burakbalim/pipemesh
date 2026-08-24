@@ -1,0 +1,19 @@
+{
+  "intents": [
+    {
+      "id": "buy_something",
+      "workflow": "vendor_selection",
+      "description": "The user wants to buy, order or source goods, parts or materials — anything that ends in a purchase",
+      "matches": [
+        "we need", "i need", "order", "buy", "purchase", "source",
+        "replacement", "spare", "supplier", "quote",
+        "sipariş", "satın al", "lazım", "tedarik"
+      ]
+    }
+  ],
+
+  "model": "fast",
+  "prompt": "intent.classify.v1",
+
+  "minimumConfidence": 0.6
+}

@@ -87,10 +87,15 @@ def source_page() -> FileResponse:
 
 @app.post("/api/requests")
 def start(request: Request, message: str = Body(embed=True)) -> dict:
+    """Either an execution was started, or there is something to say back.
+
+    Both are ordinary answers. A message the runtime could not place is not an
+    error — the call was fine and nothing went wrong; it simply named no work.
+    """
     if not message.strip():
         raise HTTPException(400, "say what you need")
 
-    return {"executionId": conversations.start(request.state.session, message.strip())}
+    return dict(conversations.start(request.state.session, message.strip()))
 
 
 @app.get("/api/requests")

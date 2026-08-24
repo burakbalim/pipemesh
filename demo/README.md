@@ -14,6 +14,11 @@ it is the runtime's business (§3).
 
 ## What the pages are for
 
+**A greeting is not a workflow.** The demo hands every message to `mesh.process`, and the runtime
+decides which workflow it means. When it cannot tell — a greeting, a question about the weather —
+nothing is started and this application answers instead. Putting a greeting in the workflow would
+mean an execution row for someone saying hello, and conversation logic inside the engine (§3, §19).
+
 **Two processes, both visible.** The runtime drives the execution; this process serves the three
 capabilities the flow calls. The panel on the right of `/` is the runtime reporting on itself —
 step starts, suspensions, resumes, the terminal status — not this application narrating.

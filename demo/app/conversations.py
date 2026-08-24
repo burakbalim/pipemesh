@@ -12,12 +12,28 @@ import threading
 from collections import OrderedDict
 from typing import Any, Mapping, Optional
 
-from pipemesh import Approval, PipeMesh
+from pipemesh import Approval, PipeMesh, PipeMeshError
 
 from .trace import Trace
 
-WORKFLOW = "vendor_selection"
 COST_CENTRE = "CC-4100"
+
+# What to say when the runtime could not read a message as anything it runs.
+# This lives here rather than in a workflow on purpose: a greeting is not
+# durable work. There is nothing to persist, nothing to resume, and nothing a
+# crash could lose — so it never becomes an execution, and the engine never
+# learns how to make conversation (§3, §19).
+GREETED = (
+    "Hello. I turn a purchase request into an order: I read what you need, look up "
+    "suppliers and this quarter's budget at the same time, and shortlist three. You pick "
+    "one, and above €10,000 it stops for a manager to approve. Tell me what you need."
+)
+UNREAD = (
+    "I could not read that as a purchase request, so nothing was started — the runtime "
+    "refuses to guess which workflow a message meant rather than picking the closest one. "
+    "Try something like: \"We need 40 replacement bearings for line 3.\""
+)
+GREETINGS = ("hi", "hello", "hey", "merhaba", "selam", "günaydın", "good morning", "yo")
 
 # A public demo runs until somebody stops it. Traces are held in memory, so the
 # oldest ones are dropped rather than allowed to accumulate — the execution
@@ -37,8 +53,14 @@ class Conversations:
 
     # -- starting -----------------------------------------------------------
 
-    def start(self, session: str, message: str) -> str:
-        """Run the flow for one visitor's message.
+    def start(self, session: str, message: str) -> Mapping[str, Any]:
+        """Read one visitor's message and run whatever it asks for.
+
+        The runtime decides which workflow a message means, and stops there: an
+        intent resolver returns a workflow id and nothing else — not a step to
+        start at, not a branch to take (§19, §20). When it cannot tell, no
+        execution is created and this application answers instead, which is why
+        saying hello does not file a purchase request.
 
         The correlation key is derived from the session, so two visitors waiting
         at the same step are already separate: the event that wakes one cannot
@@ -46,11 +68,16 @@ class Conversations:
         filter this application remembered to write.
         """
         request_id = f"{session}-{secrets.token_hex(4)}"
-        handle = self._mesh.execute(WORKFLOW, {
-            "requestId": request_id,
-            "message": message,
-            "costCentre": COST_CENTRE,
-        })
+        try:
+            handle = self._mesh.process(message, {
+                "requestId": request_id,
+                "message": message,
+                "costCentre": COST_CENTRE,
+            })
+        except PipeMeshError as unread:
+            if not unread.failed_precondition:
+                raise
+            return {"reply": GREETED if _is_greeting(message) else UNREAD}
 
         trace = Trace()
         with self._lock:
@@ -60,7 +87,17 @@ class Conversations:
         threading.Thread(
             target=self._follow, args=(handle.execution_id, request_id, trace), daemon=True
         ).start()
-        return handle.execution_id
+        return {"executionId": handle.execution_id, "read_as": self._intent(handle.execution_id)}
+
+    def _intent(self, execution_id: str) -> Mapping[str, Any]:
+        """How the message was read, as the execution recorded it.
+
+        Worth showing rather than hiding: `deterministic` means a phrase settled
+        it and no model was asked, which is the ordering that keeps a routing
+        decision cheap and repeatable (§20).
+        """
+        intent = self._mesh.get(execution_id).variables.get("intent") or {}
+        return {"intent": intent.get("id"), "by": intent.get("resolvedBy")}
 
     def executions_of(self, session: str) -> list[str]:
         with self._lock:
@@ -192,3 +229,9 @@ class Conversations:
             if option["vendorId"] == vendor_id:
                 return option
         raise LookupError(f"the model did not offer '{vendor_id}'")
+
+
+def _is_greeting(message: str) -> bool:
+    """A greeting deserves a greeting back, not an error about workflows."""
+    words = message.lower().strip(" .!?").split()
+    return bool(words) and words[0] in GREETINGS and len(words) <= 4

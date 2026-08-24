@@ -3,6 +3,8 @@
 A purchase request, from the message somebody typed to the order that gets placed.
 
 ```
+(a message)                         read as an intent — or as nothing at all
+   ↓
 understand (llm)                    reads the request into a shape
    ↓
 gather (parallel) ──┬── vendor_search      capability
@@ -38,6 +40,13 @@ Two steps call a model, so a key is needed. Everything else — the suppliers, t
 order — is Python in `procurement.py`, which `app.py` and the web demo under `demo/` both serve.
 
 ## What this is meant to show
+
+**Reading a message picks a workflow and stops there.** `intents/intents.json` says which
+messages mean `vendor_selection`, phrases first and a model only when they do not settle it — so
+"we need 40 bearings" costs no model call at all. What comes back is a workflow id and nothing
+else: not a step to start at, not a branch to take (§19, §20). A greeting matches nothing, the
+runtime refuses to guess, and no execution is created — which is why saying hello to the demo
+does not file a purchase request.
 
 **The flow is a file.** Moving the approval threshold from ten thousand to fifty thousand, or
 adding a second approver, is an edit to `workflows/vendor-selection.json`. `app.py` is not

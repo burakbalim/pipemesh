@@ -40,8 +40,28 @@ async function send(text) {
   say("mine", "You", text);
   disable(true);
 
-  const started = await post("/api/requests", { message: text });
-  follow(started.executionId);
+  const answer = await post("/api/requests", { message: text });
+
+  // Two ordinary outcomes. The runtime reads a message, picks a workflow and
+  // stops there; when it cannot tell, nothing was started and there is only
+  // something to say back.
+  if (answer.reply) {
+    say("system", "", answer.reply);
+    disable(false);
+    return;
+  }
+
+  routed(answer.read_as);
+  follow(answer.executionId);
+}
+
+/* Which workflow the message was read as, and by what. Worth showing: "a
+ * phrase" means no model was asked, because the cheap answer already settled
+ * it — the ordering that keeps routing repeatable as well as cheap. */
+function routed(readAs) {
+  if (!readAs?.intent) return;
+  const how = readAs.by === "deterministic" ? "a phrase" : "the model";
+  say("system", "", `Read as "${readAs.intent}" by ${how}.`);
 }
 
 async function choose(vendorId, buttons) {
@@ -242,6 +262,12 @@ function say(kind, who, text) {
   return turn;
 }
 
+function greet() {
+  say("system", "",
+    "Hello. Tell me what you need and I will turn it into an order — or just say hello, " +
+    "which starts nothing at all.");
+}
+
 function money(amount) {
   return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR",
     maximumFractionDigits: 0 }).format(amount);
@@ -289,7 +315,7 @@ async function rejoin() {
   const last = mine.executionIds.at(-1);
 
   if (!last) {
-    say("system", "", "Ask for something, or pick one of the examples below.");
+    greet();
     return;
   }
 
