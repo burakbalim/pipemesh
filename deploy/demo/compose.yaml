@@ -4,6 +4,11 @@
 # host is slow, occasionally flaky, and puts a JDK somewhere it does not belong.
 # CI builds them; this pulls them.
 #
+# `pull_policy: always` because every tag here moves. Without it a deployment
+# reuses whatever is already on the host under that name and quietly runs code
+# from a previous release — which reads as "the fix did not work" rather than
+# "the fix was not deployed", and costs an afternoon to tell apart.
+#
 # The database is yours. There is no postgres service here on purpose — this
 # stack connects to one, it does not operate one.
 #
@@ -31,6 +36,7 @@ services:
   # source page now read the same bytes, because both come from this image.
   config:
     image: ghcr.io/burakbalim/pipemesh-demo:staging
+    pull_policy: always
     # A fresh volume belongs to root and the demo image runs as someone else.
     # This container only copies files and exits.
     user: root
@@ -55,6 +61,7 @@ services:
   # counting the same money is how two numbers start disagreeing.
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
+    pull_policy: always
     command: ["--config", "/config/config.yaml", "--port", "4000"]
     depends_on:
       config: { condition: service_completed_successfully }
@@ -72,6 +79,7 @@ services:
   # splitting api from dispatcher is two environment variables when it is not.
   runtime:
     image: ghcr.io/burakbalim/pipemesh-runtime:staging
+    pull_policy: always
     depends_on:
       config: { condition: service_completed_successfully }
       litellm: { condition: service_started }
@@ -92,6 +100,7 @@ services:
   # Accounts, keys, plans and quota. The product.
   console:
     image: ghcr.io/burakbalim/pipemesh-console:staging
+    pull_policy: always
     networks: [default, proxy]
     labels:
       traefik.enable: "true"
@@ -127,6 +136,7 @@ services:
   # watch rather than one.
   demo:
     image: ghcr.io/burakbalim/pipemesh-demo:staging
+    pull_policy: always
     depends_on: [runtime]
     networks: [default, proxy]
     labels:
