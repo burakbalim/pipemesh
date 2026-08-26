@@ -24,7 +24,13 @@
 <main>
   <h1>What is behind this</h1>
   <p class="lede">
-    Read from disk by the running process, so what is below is what is running.
+    <strong>Never retry what may already have happened.</strong> That is the rule this whole
+    thing is built around, and <code>capabilities/place-order.json</code> below is where it is
+    declared &mdash; <code>idempotent: false</code>, so a crash mid-order stops for a person
+    rather than risking a second one.
+  </p>
+  <p class="lede">
+    Everything here is read from disk by the running process, so what is below is what is running.
     The flow is a JSON file the runtime compiled; the company's code is ordinary
     Python that never mentions a workflow. Neither knows how the other is
     deployed. All of it is on

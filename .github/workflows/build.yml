@@ -143,3 +143,59 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Packages, not images, and only for a tag. `staging` moves every push; a
+  # version on a registry never does — a PyPI release cannot be re-uploaded, so
+  # the guard below refuses a tag that disagrees with VERSION rather than
+  # discovering it afterwards.
+  release:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Lets both registries attest where the package was built from, without a
+      # long-lived credential for PyPI at all.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag and VERSION agree
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          declared="$(tr -d '[:space:]' < VERSION)"
+          if [ "$tagged" != "$declared" ]; then
+            echo "tag $GITHUB_REF_NAME does not match VERSION $declared" >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the Python package
+        working-directory: sdk/python
+        run: |
+          python -m pip install -q build
+          python -m build
+
+      # Trusted publishing: PyPI checks this workflow's identity instead of a
+      # token somebody has to store and rotate.
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk/python/dist
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish the TypeScript package
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          npm run build
+          npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

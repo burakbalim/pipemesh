@@ -74,5 +74,5 @@ model whose price nobody registered, because an unpriced model is not a free one
 where a failure goes, so an approved purchase that the company's own code then refuses ends at
 `over_budget` — a state somebody can read — rather than as an execution that died.
 
-**Repeating is refused where it matters.** `place_order` declares `idempotent: false`, so recovery
+**Never retry what may already have happened.** `place_order` declares `idempotent: false`, so recovery
 after a crash stops for a person rather than risking a second order.

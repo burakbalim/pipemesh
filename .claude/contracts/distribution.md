@@ -1,6 +1,6 @@
 # Distribution
 
-**Status:** Draft
+**Status:** Implemented — awaiting the first tagged release
 **Created:** 2026-08-26
 **DESIGN.md kapsamı:** §26.2 (SDK sınırı), §25 (sürümleme ve yayın)
 
@@ -146,4 +146,64 @@ Preflight sırasında ölçülerek bulundu, tahmin değil:
 
 ## Implementation Notes
 
-_To be filled as work progresses_
+Dört maddenin dördü de yapıldı; kalan tek adım insan adımı — jetonlar ve ilk tag.
+
+### #30 kapatıldı
+
+`pipemesh-sdk` seçmek "PipeMesh'te kalıyoruz" demekti, ve yayın adı kalıcı kilitliyor. Contract
+"Closed — not doing" olarak işaretlendi, analizi duruyor: ölçüm ve kontrol yöntemi bir gün
+gerekirse hâlâ geçerli.
+
+### TypeScript paketi import edilemiyordu
+
+Preflight'ın bulduğu hata gerçekti: `main: dist/index.js`, derlemenin ürettiği `dist/src/index.js`.
+`tsconfig`'in `rootDir: "."` olması derlemeyi bir seviye içeri itiyor ve kimse fark etmemiş, çünkü
+**testler paketi hiç yüklemiyor** — `../src`'ten import ediyorlar. Suite yeşilken paket kurulamaz
+durumdaydı.
+
+`test/package.test.ts` bu boşluğu kapatıyor: `package.json`'ın kendi `main` alanından `require`
+ediyor, bildirdiği tipleri arıyor, worker'ın çalışma zamanında okuduğu `.proto`'nun paketlendiğini
+doğruluyor, ve `files`'ın test dizinini yayınlamadığını kontrol ediyor. Eski `package.json` ile
+üçü birden düşüyor.
+
+Kanıt testin kendisi değil: paket `npm pack` ile paketlenip boş bir projeye kuruldu ve
+`require("@pipemesh/client")` çalıştı, proto yerindeydi, testler sızmamıştı.
+
+Python tarafı sağlamdı ve aynı yöntemle doğrulandı — wheel temiz bir sanal ortama kuruldu,
+`import pipemesh` ve dışa açılan dokuz ad çalıştı.
+
+### Dağıtım adı import adını değiştirmedi
+
+`pyproject.toml`'da yalnız `name` satırı değişti. `packages = ["pipemesh"]` aynı kaldı, yani
+`pip install pipemesh-sdk` sonrası hâlâ `import pipemesh`. Tek satır, ve kodun hiçbir yerinde
+karşılığı yok.
+
+### Yayın bir tag'e bağlı, ve tag VERSION ile uyuşmak zorunda
+
+`release` işi `v*` tag'lerinde koşuyor ve `test`'e bağlı. İlk adımı, tag'in `VERSION` ile
+uyuştuğunu kontrol etmek: bir PyPI sürümü yeniden yüklenemez, dolayısıyla uyuşmazlığı yayından
+*sonra* fark etmek `0.1.1` yayınlamak demek. `ReleaseConsistencyTest` zaten `VERSION` ile iki SDK
+manifestosunu karşılaştırıyor; eksik olan halka tag'di.
+
+PyPI için trusted publishing (OIDC) seçildi — saklanacak ve döndürülecek bir jeton yok. npm için
+`NPM_TOKEN` gerekiyor, `--provenance` ile.
+
+### README artık bir problemle açıyor
+
+Eski ilk cümle bir kategoriydi ve rakiplerin hepsi aynısını söylüyordu. Yenisi bir soru soruyor —
+*süreç ödemeyi kaydetmeden öldü, geri geldiğinde ne oluyor* — ve cevabı ayırt edici cümle:
+**"Never retry what may already have happened."**
+
+Aynı cümle üç yerde: README, demonun kaynak sayfası (ve orada hangi dosyanın onu bildirdiği),
+ve örneğin README'si. Depo açıklaması insan adımı.
+
+Sıralama değere varış süresine göre: **canlı demo** (kurulum yok), **docker compose** (bir komut),
+**pip install** (kendi kodun). Paketler henüz yayınlanmadığı için o bölüm bunu açıkça söylüyor —
+README'nin bugün yalan söylememesi, yarın doğru olmasından önemli.
+
+### Kalan: insan adımları
+
+- PyPI'de `pipemesh-sdk` için trusted publisher tanımı
+- npm'de `@pipemesh` org'u ve `NPM_TOKEN`
+- GitHub depo açıklamasına aynı cümle
+- `v0.1.0` tag'i — yayını başlatan şey

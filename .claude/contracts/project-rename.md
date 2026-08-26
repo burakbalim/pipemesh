@@ -1,8 +1,23 @@
 # Project Rename
 
-**Status:** Draft
+**Status:** Closed — not doing
 **Created:** 2026-08-23
 **DESIGN.md kapsamı:** §26.1 (proto = sözleşme), §31 (yapılandırma dizini), §26.3 (dağıtım)
+
+## Kapatıldı (2026-08-26)
+
+Ad `pipemesh` olarak kalıyor. Karar #31'de verildi: Python paketi `pipemesh-sdk` olarak
+yayınlanacak, ve **bir yayın adı kalıcı olarak kilitler** — bu ikisi aynı anda doğru olamazdı.
+
+Bırakılan şey ucuz değildi, kazanılan da öyle: `perdure` çakışması bulunduktan sonra elde tek
+aday (`cantle`) kalmıştı, ve o da `candle`'a bir harf uzaklıktaydı. Kalabalık bir alanda daha iyi
+bir ad aramak gerçek bir maliyet; PipeMesh'i tutmanın maliyeti ise PyPI'de dağıtım adının
+`pipemesh` olamaması — ki import adı yine `pipemesh` kalıyor, çünkü dağıtım adı import adını
+belirlemiyor.
+
+Aşağıdaki analiz duruyor, çünkü bir gün yeniden adlandırma gerekirse ölçüm ve yöntem hâlâ
+geçerli — özellikle "tarif eden ad, rakibinin de bulacağı addır" dersi ve her kayıt defterine
+bakan kontrol listesi. Ama bugün uygulanmıyor.
 
 ## Goal
 

@@ -1,24 +1,47 @@
 # PipeMesh
 
-**A language-agnostic declarative runtime for AI workflows, implemented in Java.**
+**Your workflow charged a customer, and then the process died before recording it. What happens
+when it comes back?**
 
-A declarative, model-agnostic runtime for building composable AI workflows. Provider-independent
-and durable by design: workflows survive process failures, resume where they left off, and stay
-observable end to end.
+Most runtimes retry the step. PipeMesh refuses to: a capability declared `idempotent: false` is
+never repeated, because a transport failure leaves it genuinely unknown whether the call landed.
+The execution stops for a person instead of guessing — and everything around it (which model ran,
+what it cost, who approved) is on disk, so the person deciding can see what actually happened.
 
-PipeMesh treats the workflow itself as a first-class, versioned, declarative artifact. Application
-behavior is described in JSON; the runtime interprets that definition and executes it through
-pluggable model providers, capabilities and tools.
+> **Never retry what may already have happened.**
 
-```text
-Workflow JSON  →  WHAT should happen
-Runtime        →  HOW it happens
+A workflow here is a JSON file, not code. It says *what* should happen; the runtime owns *when*,
+and your application keeps *what it does*.
+
+### See it
+
+**[The live demo →](https://demo-pipemesh.getspeakhub.com/)** — a purchase request: a model reads
+it, two of the company's own functions run at once, three suppliers come back, and above €10,000
+it stops for a manager on [another page](https://demo-pipemesh.getspeakhub.com/approvals). Close
+the tab while it waits and come back: the execution is still there, because it was never in
+memory. The [source page](https://demo-pipemesh.getspeakhub.com/source) shows the files the
+running process is reading.
+
+### Run it
+
+```bash
+git clone https://github.com/burakbalim/pipemesh
+cd pipemesh/deploy/on-premise && docker compose up
 ```
 
-**[Try it →](https://demo-pipemesh.getspeakhub.com/)** — a purchase request running on this
-runtime: a model reads it, two of the company's own functions are called at once, and it stops for
-a person above €10,000. The [source page](https://demo-pipemesh.getspeakhub.com/source) shows the
-files the running process is reading.
+One node, no API key, no account: `examples/hello` is a workflow with one decision and two endings.
+
+### Use it from your own code
+
+```bash
+pip install pipemesh-sdk        # Python
+npm install @pipemesh/client    # TypeScript
+```
+
+*Published with the first tagged release; until then both live in [`sdk/`](sdk).*
+
+Your capabilities stay in your own process. The runtime calls them down a connection your worker
+opens, so it needs no reachable address, no certificate and no firewall exception.
 
 > **Status:** v0.1, first slice complete. A workflow described in a configuration directory runs end
 > to end — model, condition, capability over MCP, human approval, an external event — survives a
@@ -124,15 +147,6 @@ LangChain, OpenAI, MCP and managed agent platforms are all *providers* — optio
 dependencies of the core. The LangChain adapter does not even depend on LangChain: it takes
 anything with an `invoke()` method, and a chain reaches the runtime over the same worker
 connection any other application code uses.
-
-## Running it
-
-```bash
-cd deploy/on-premise && docker compose up
-```
-
-One node, no API key, no account: `examples/hello` is a workflow with one decision and two
-endings. See [deploy/on-premise](deploy/on-premise) for what that install is and is not.
 
 ## Deployment
 

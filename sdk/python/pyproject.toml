@@ -1,5 +1,5 @@
 [project]
-name = "pipemesh"
+name = "pipemesh-sdk"
 version = "0.1.0"
 description = "Python client for the PipeMesh workflow runtime"
 readme = "README.md"
