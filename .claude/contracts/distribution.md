@@ -55,8 +55,10 @@ yarı canlı bir yeniden adlandırma contract'ı, hiç olmamasından kötüdür.
 
 ### 1. Paketleri yayınla
 
-- **Python:** dağıtım `pipe-mesh-flow`, import `pipemesh`. `pyproject.toml` bugün
-  `name = "pipemesh"` diyor — yalnız o satır değişir.
+- **Python:** dağıtım **`pipemesh-sdk`**, import `pipemesh`. `pyproject.toml` bugün
+  `name = "pipemesh"` diyor — yalnız o satır değişir. `pipe-mesh-flow` yerine bu seçildi:
+  `flow` eki `pipemesh`'in zaten çağrıştırdığını tekrarlıyor, ve `-sdk` npm'deki
+  `@pipemesh/client` ile aynı şeyi söylüyor.
 - **TypeScript:** `@pipemesh/client` — skop boş, `package.json` zaten bu adı taşıyor. Skop npm'de
   bir org olarak açılmalı.
 - **Maven Central:** bu contract'ın dışında. `groupId` alan adı sahipliği ister ve Java runtime
@@ -102,7 +104,45 @@ kurtarma taraması insana durur). Bir cümle seçilmeli ve README, demo ve depo 
 
 ## Split Decision
 
-_To be filled by Agent 0_
+**Decision:** single-prompt
+
+**Reasoning:** Üç maddenin toplamı ince bir katman — `pyproject.toml`'da bir satır,
+`package.json`'da bir giriş noktası, CI'da bir iş, ve README. Üç bağımsız dikey dilim yok;
+bölmek koordinasyon maliyeti ekler, iş çıkarmaz.
+
+Daha önemlisi **sıra zorunlu**: yayın geri alınamaz, ve ortasında ajanın yapamayacağı insan
+adımları var (npm org açmak, PyPI trusted publishing kurmak). Paralel ajanlar burada birbirini
+bekler.
+
+### Sıra
+
+1. **#30 kapatılır.** `pipemesh-sdk` seçilmesi "PipeMesh'te kalıyoruz" demek. Yarı canlı bir
+   yeniden adlandırma contract'ı bırakmak, ileride bu adı kimin kilitlediğini belirsiz yapar.
+2. **Paketleri gerçekten kurulabilir hâle getir** — aşağıdaki TS hatası dahil.
+3. **CI'a yayın işi**, `v*` tag'ine bağlı, `mvn test`'in arkasından.
+4. **README ve tek cümle.** Kod değil, ama contract'ın asıl amacı bu.
+5. **Yayın** — insan onayıyla, ve ancak 1-4 bittikten sonra.
+
+### Risk points
+
+Preflight sırasında ölçülerek bulundu, tahmin değil:
+
+- **`@pipemesh/client` bugün import edilemez.** `package.json` `main: dist/index.js` diyor,
+  derleme `dist/src/index.js` üretiyor. Yerel testler kaynaktan import ettiği için bunu hiç
+  görmüyor — paketi kuran ilk kişi görür. Düzeltme tek satır; **kanıtı `npm test` değil, paketi
+  kurup import etmek.**
+- **Test dosyaları npm paketine giriyor** (`dist/test/*`). Zararsız ama yayınlanan yüzeyin parçası
+  olmamalı.
+- **Python tarafı sağlam.** Wheel kuruldu, temiz bir ortamda `import pipemesh` ve `PipeMesh`,
+  `PipeMeshWorker` çalıştı, üretilmiş stub'lar paketin içinde. Ölçüldü.
+- **Yayın geri alınamaz.** Bir PyPI sürüm numarası yeniden kullanılamaz; `0.1.0` bir kez yanlış
+  çıkarsa `0.1.1` yayınlanır ve yanlışı herkes görür. İlk yayın temiz bir makinede baştan
+  denenmeli.
+- **Jetonlar kullanıcının.** PyPI trusted publishing (OIDC) jeton saklamamayı sağlıyor ve
+  tercih edilmeli; npm için org ve jeton insan adımı.
+- **Sürüm tutarlılığı zaten korunuyor.** `ReleaseConsistencyTest` `VERSION`, `pyproject.toml` ve
+  `package.json`'ı karşılaştırıyor ve stub'ların proto'dan üretildiğini doğruluyor — yayın bu
+  testin arkasından geçmeli.
 
 ## Implementation Notes
 
