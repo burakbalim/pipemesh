@@ -7,6 +7,10 @@ requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
 dependencies = ["grpcio>=1.60", "protobuf>=4.25"]
 
+[project.urls]
+Homepage = "https://github.com/burakbalim/pipemesh"
+Issues = "https://github.com/burakbalim/pipemesh/issues"
+
 [project.optional-dependencies]
 dev = ["grpcio-tools>=1.60", "pytest>=7"]
 

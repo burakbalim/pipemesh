@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "description": "TypeScript client for the PipeMesh workflow runtime",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/burakbalim/pipemesh.git",
+    "directory": "sdk/typescript"
+  },
+  "homepage": "https://github.com/burakbalim/pipemesh",
+  "bugs": "https://github.com/burakbalim/pipemesh/issues",
   "type": "commonjs",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
