@@ -196,9 +196,18 @@ jobs:
 
       # Trusted publishing: PyPI checks this workflow's identity instead of a
       # token somebody has to store and rotate.
+      #
+      # `skip-existing` because this job publishes to two registries and the
+      # second one can fail on its own: 0.1.0 reached PyPI and then npm refused
+      # the scope, which left a tag that could never be re-cut. Skipping a file
+      # PyPI already holds is not a retry of something unknown — the registry
+      # states plainly that it has it — and it is what makes a half-finished
+      # release finishable instead of a burnt version number. PyPI stays last
+      # to fail and first to run: it is the upload nothing can take back.
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: sdk/python/dist
+          skip-existing: true
 
       - name: Publish the TypeScript package
         working-directory: sdk/typescript

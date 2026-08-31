@@ -203,7 +203,24 @@ README'nin bugün yalan söylememesi, yarın doğru olmasından önemli.
 
 ### Kalan: insan adımları
 
-- PyPI'de `pipemesh-sdk` için trusted publisher tanımı
-- npm'de `@pipemesh` org'u ve `NPM_TOKEN`
+- PyPI'de `pipemesh-sdk` için trusted publisher tanımı — yapıldı
+- npm'de `@pipemesh` org'u ve `NPM_TOKEN` — jeton eklendi, kapsam yetkisi eksik
 - GitHub depo açıklamasına aynı cümle
-- `v0.1.0` tag'i — yayını başlatan şey
+- `v0.1.0` tag'i — atıldı, yarım kaldı
+
+### `v0.1.0`: yarım yayın
+
+Tag atıldı, `test` geçti, PyPI `pipemesh-sdk 0.1.0`'ı aldı, `npm publish` düştü.
+Jeton geçerliydi — `npm whoami` adımı tam da bunun için eklenmişti ve geçti. Geçmediği
+şey `@pipemesh` kapsamına **yazma** yetkisiydi, ki `whoami` onu hiç sormaz. Bir kimlik
+kontrolünün kanıtladığı şeyle bir yayının ihtiyaç duyduğu şey aynı değil.
+
+Asıl ders sıralamada değil, tekrarlanabilirlikte: iş iki registry'ye yayınlıyordu ve
+ikincisi kendi başına düşebiliyordu, ama birincisi geri alınamıyordu. Bu haliyle her
+deneme bir sürüm numarası yakar. `skip-existing: true` bunu düzeltiyor — PyPI zaten
+tuttuğu bir dosyayı atlıyor, ki bu "olmuş olabilecek bir şeyi tekrarlamak" değil:
+registry elinde olduğunu açıkça söylüyor. Bilinmeyen olan taşıma hatası, bu değil.
+
+PyPI ilk sırada kalıyor. Sezgi tersini söylüyor (geri alınamayan en sona), ama npm'in
+`skip-existing`'i yok: npm önce koşsaydı, sonraki bir hata tag'i büsbütün yeniden
+atılamaz hale getirirdi. Atlanabilen adım önce gider.
