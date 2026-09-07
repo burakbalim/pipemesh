@@ -204,7 +204,7 @@ README'nin bugün yalan söylememesi, yarın doğru olmasından önemli.
 ### Kalan: insan adımları
 
 - PyPI'de `pipemesh-sdk` için trusted publisher tanımı — yapıldı
-- npm'de `@pipemesh` org'u ve `NPM_TOKEN` — jeton eklendi, kapsam yetkisi eksik
+- npm'de `@pipemesh` org'u ve `NPM_TOKEN` — org açık, jetonun kendisi yeterli, secret'ta eski jeton duruyor
 - GitHub depo açıklamasına aynı cümle
 - `v0.1.0` tag'i — atıldı, yarım kaldı
 
@@ -224,3 +224,28 @@ registry elinde olduğunu açıkça söylüyor. Bilinmeyen olan taşıma hatası
 PyPI ilk sırada kalıyor. Sezgi tersini söylüyor (geri alınamayan en sona), ama npm'in
 `skip-existing`'i yok: npm önce koşsaydı, sonraki bir hata tag'i büsbütün yeniden
 atılamaz hale getirirdi. Atlanabilen adım önce gider.
+
+### İkinci deneme: aynı adım, aynı yer, ve bu sefer sebep başka
+
+`v0.1.0` düzeltmeli commit'e taşındı ve koşu yeniden başladı. `test` geçti, üç image
+yayınlandı, tag/VERSION uyuştu, `npm whoami` geçti, **PyPI adımı `skip-existing` ile
+atladı ve yeşil döndü** — düzeltmenin doğrulanması buydu: registry'nin zaten tuttuğu bir
+dosya artık bir sürüm numarası yakmıyor, tag istendiği kadar yeniden atılabiliyor.
+
+`npm publish` yine düştü. Bu sefer sebep jetonun kendisi değildi: sahibinin verdiği yeni
+jeton yerelde sorgulandığında `burakbalim - owner` döndü, yani `@pipemesh` org'unun sahibi
+ve tüm paketlerde yazma yetkisi var. Geriye en güçlü açıklama olarak **secret'ın içeriği**
+kalıyor — GitHub'daki `NPM_TOKEN`'ın hâlâ 31 Ağustos'ta düşen eskisini taşıması. Kesin
+değil: iş günlükleri kimlik doğrulamasız okunamıyor, dolayısıyla `--provenance`'ın kendi
+başına düşmüş olma ihtimali elenmiş değil. Bir sonraki koşu ikisini ayırt edecek.
+
+Ve bunu iki koşu boyunca gizleyen şey yine ön kontroldü. `npm whoami` "secret geçerli bir
+kimlik taşıyor mu" sorusunu soruyor; her iki koşuda da doğru cevap verdi. Sorulması gereken
+"bu kimlik bu kapsama yazabiliyor mu" idi. `npm org ls pipemesh` onu soruyor ve yanlış
+jetonla düşüyor. Hâlâ yayının kendisi değil — org üyeliği paket bazında yazma yetkisiyle
+aynı şey değil — ama bu işin eline tutuşturulan jetonun yanlış olduğu durumda düşüyor,
+ki iki başarısızlığın ikisi de o durumdu.
+
+Kontrolün maliyeti bir satır; onsuz geçen iki koşunun maliyeti bir sürüm numarası ve iki
+gün. Bir ön kontrolün değeri neyi kanıtladığında değil, hangi başarısızlığı yayından
+*önce* yakaladığında.

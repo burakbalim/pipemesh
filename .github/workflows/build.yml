@@ -181,10 +181,19 @@ jobs:
 
       # Both registries are one-way: a version that lands on PyPI can never be
       # re-uploaded, so a credential that turns out to be missing *after* that
-      # costs a version number rather than a re-run. Ask npm who we are while
-      # nothing has been published yet.
-      - name: The npm credential works
-        run: npm whoami
+      # costs a version number rather than a re-run. Ask npm about the
+      # credential while nothing has been published yet.
+      #
+      # `whoami` alone is the check that already let a release through twice:
+      # it proves a token is valid and says nothing about whether it may write
+      # to this scope, which is the permission that was actually missing both
+      # times. `org ls` asks the question the publish will ask. It is still not
+      # the publish itself — membership is not per-package write — but it fails
+      # on the credential this job has actually been handed wrong.
+      - name: The npm credential may write to the scope
+        run: |
+          npm whoami
+          npm org ls pipemesh
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
