@@ -204,7 +204,7 @@ README'nin bugün yalan söylememesi, yarın doğru olmasından önemli.
 ### Kalan: insan adımları
 
 - PyPI'de `pipemesh-sdk` için trusted publisher tanımı — yapıldı
-- npm'de `@pipemesh` org'u ve `NPM_TOKEN` — org açık, jetonun kendisi yeterli, secret'ta eski jeton duruyor
+- npm'de `@pipemesh` org'u ve `NPM_TOKEN` — org açık ve erişim yeterli; jetonun 2FA'yı bypass edebilen türde olması gerekiyor
 - GitHub depo açıklamasına aynı cümle
 - `v0.1.0` tag'i — atıldı, yarım kaldı
 
@@ -232,12 +232,38 @@ yayınlandı, tag/VERSION uyuştu, `npm whoami` geçti, **PyPI adımı `skip-exi
 atladı ve yeşil döndü** — düzeltmenin doğrulanması buydu: registry'nin zaten tuttuğu bir
 dosya artık bir sürüm numarası yakmıyor, tag istendiği kadar yeniden atılabiliyor.
 
-`npm publish` yine düştü. Bu sefer sebep jetonun kendisi değildi: sahibinin verdiği yeni
-jeton yerelde sorgulandığında `burakbalim - owner` döndü, yani `@pipemesh` org'unun sahibi
-ve tüm paketlerde yazma yetkisi var. Geriye en güçlü açıklama olarak **secret'ın içeriği**
-kalıyor — GitHub'daki `NPM_TOKEN`'ın hâlâ 31 Ağustos'ta düşen eskisini taşıması. Kesin
-değil: iş günlükleri kimlik doğrulamasız okunamıyor, dolayısıyla `--provenance`'ın kendi
-başına düşmüş olma ihtimali elenmiş değil. Bir sonraki koşu ikisini ayırt edecek.
+`npm publish` yine düştü, ve sebep tahmin edilenlerin hiçbiri değildi. İş günlüğü
+kimlik doğrulamasız API'den okunamıyor ama public repo'nun log sayfası tarayıcıdan
+okunabiliyor; orada yazan şuydu:
+
+```
+npm error code E403
+npm error 403 Forbidden - PUT https://registry.npmjs.org/@pipemesh%2fclient
+  - Two-factor authentication or granular access token with bypass 2fa
+    enabled is required to publish packages.
+```
+
+Paket derlendi, tarball doğru içerikle hazırlandı, provenance imzalanıp şeffaflık kaydına
+yazıldı — 403 bunlardan *sonra* geldi. Eksik olan yetki değil, jetonun **türü**: hesapta
+yazma işlemleri için 2FA zorunlu ve secret'taki jeton onu bypass edemiyor.
+
+### Ve eklenen ön kontrol bunu da yakalamadı
+
+`npm org ls pipemesh` bir okuma işlemi. 2FA zorunluluğu yazma işlemlerine uygulanıyor,
+dolayısıyla kontrol yeşil geçti ve yayın yine aynı yerde düştü. Kontrol yanlış değil —
+jetonun org'a hiç erişemediği durumu hâlâ yakalar, ki 31 Ağustos'ta muhtemel sebep oydu —
+ama üçüncü kez aynı ders çıktı ve bu sefer daha keskin:
+
+**Bir yayının yapabileceğini yalnızca yayının kendisi kanıtlar.** Her ön kontrol, kontrol
+ettiği şeyle yapılacak şey arasındaki farkı taşır: `whoami` kimliği sordu, yazma yetkisini
+kaçırdı; `org ls` erişimi sordu, jeton türünü kaçırdı. Sıradaki kontrol de başka bir şeyi
+kaçıracak.
+
+Dolayısıyla asıl koruma ön kontrollerde değil, **başarısızlığın maliyetini düşürmekte** —
+ki o zaten yapıldı: `skip-existing` sayesinde bu üç başarısız koşunun hiçbiri bir sürüm
+numarası yakmadı, `v0.1.0` hâlâ yayınlanabilir durumda. Ucuz bir yeniden deneme, mükemmel
+bir ön kontrolden daha değerli. Ön kontroller kalıyor çünkü ucuzlar, ama onlara yayının
+garantisi muamelesi yapmak bu contract'ın üç kez düştüğü hata.
 
 Ve bunu iki koşu boyunca gizleyen şey yine ön kontroldü. `npm whoami` "secret geçerli bir
 kimlik taşıyor mu" sorusunu soruyor; her iki koşuda da doğru cevap verdi. Sorulması gereken
